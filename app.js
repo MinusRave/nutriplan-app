@@ -887,6 +887,7 @@ app.post('/api/submit', apiLimiter, csrfProtection, [
     const externalEndpoint = process.env.EXTERNAL_API_ENDPOINT;
     if (externalEndpoint) {
       try {
+        console.log(`Invio dati all'endpoint esterno: ${externalEndpoint}`);
         await axios.post(externalEndpoint, payload, {
           headers: {
             'Content-Type': 'application/json',
@@ -895,9 +896,11 @@ app.post('/api/submit', apiLimiter, csrfProtection, [
         });
         console.log('Dati inviati con successo all\'endpoint esterno');
       } catch (error) {
-        console.error('Errore nell\'invio dei dati all\'endpoint esterno:', error);
+        console.error('Errore nell\'invio dei dati all\'endpoint esterno:', error.message);
         // Continuiamo comunque, non blocchiamo l'esperienza utente
       }
+    } else {
+      console.log('Nessun endpoint esterno configurato. Saltando invio dati a servizi esterni.');
     }
     
     // Reset della conversazione
