@@ -527,6 +527,11 @@ class NutritionalConversation {
 
 // ROUTING
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', version: process.env.npm_package_version || '1.0.0' });
+});
+
 // Home page
 app.get('/', csrfProtection, (req, res) => {
   res.render('index', { 
@@ -705,6 +710,7 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no'); // Important for NGINX proxying
+      res.setHeader('Access-Control-Allow-Origin', '*'); // Allow cross-origin requests
       res.flushHeaders(); // Immediately send headers
       
       // Streaming callback function
@@ -736,14 +742,17 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
         }
         
         // Send the chunk as an event - proper SSE format
-        res.write(`data: ${JSON.stringify({
+        // Ensure format follows the SSE specification exactly
+        const eventData = JSON.stringify({
           chunk,
           message: visibleContent,
           isComplete,
           conversationStep,
           isActive,
           ...(collectedData && { collectedData })
-        })}\n\n`);
+        });
+        
+        res.write(`data: ${eventData}\n\n`);
         
         // Force flush to ensure chunk is sent immediately
         res.flush && res.flush();

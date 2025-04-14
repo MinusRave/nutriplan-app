@@ -7,7 +7,10 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "test": "jest",
-    "postinstall": "node scripts/setup-directories.js"
+    "setup": "node scripts/setup-directories.js",
+    "postinstall": "node -e \"try { require('./scripts/setup-directories.js') } catch(e) { console.log('Setup script skipped in production') }\"",
+    "deploy": "fly deploy",
+    "logs": "fly logs"
   },
   "keywords": [
     "nutrition",

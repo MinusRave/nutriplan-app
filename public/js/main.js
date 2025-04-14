@@ -447,8 +447,8 @@
       
       const messageTextElement = assistantMessageElement.querySelector('.message-text');
       
-      // For now, disable streaming until we fix all issues
-      const supportsSSE = false; // Temporary disable streaming
+      // Enable streaming for real-time responses
+      const supportsSSE = true;
       
       if (supportsSSE) {
         // STREAMING APPROACH
@@ -500,6 +500,7 @@
                 buffer += decoder.decode(value, { stream: true });
                 
                 // Process complete SSE messages
+                // Split by standard SSE message separator
                 const lines = buffer.split('\n\n');
                 buffer = lines.pop() || ''; // Keep the last incomplete chunk in buffer
                 
@@ -509,18 +510,26 @@
                   // Extract the data part (handle different SSE formats)
                   let dataContent = line;
                   
+                  // Normalize SSE format - handle different server implementations
                   if (line.startsWith('data: ')) {
                     dataContent = line.replace(/^data: /, '');
                   } else if (line.includes('\ndata: ')) {
-                    const dataMatch = line.match(/data: (.*)/);
-                    if (dataMatch && dataMatch[1]) {
-                      dataContent = dataMatch[1];
+                    // Match multiline SSE data format
+                    const matches = line.match(/data: (.*?)(?:\n|$)/g);
+                    if (matches && matches.length) {
+                      // Concatenate multiple data lines if present
+                      dataContent = matches
+                        .map(m => m.replace(/^data: /, '').trim())
+                        .join('');
                     }
                   }
                   
                   try {
-                    console.log('Received SSE data:', dataContent);
-                    const eventData = JSON.parse(dataContent);
+                    // Remove any unexpected characters that might be causing JSON parse errors
+                    const cleanedData = dataContent.trim().replace(/^data:\s*/, '');
+                    console.log('Processing SSE data chunk:', cleanedData);
+                    
+                    const eventData = JSON.parse(cleanedData);
                     
                     if (eventData.chunk) {
                       fullMessage += eventData.chunk;
