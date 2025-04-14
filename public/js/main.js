@@ -521,10 +521,20 @@
           // Funzione per processare i chunk
           async function readChunks() {
             try {
+              // Aggiungiamo un flag per tracciare se la risposta è stata completata
+              let messageCompleted = false;
+              
               while (true) {
+                // Se abbiamo già completato il messaggio, usciamo dal loop
+                if (messageCompleted) {
+                  console.log('Messaggio completato, interrompo processamento ulteriori chunks');
+                  break;
+                }
+                
                 const { value, done } = await reader.read();
                 
                 if (done) {
+                  console.log('Stream terminato dal server');
                   break;
                 }
                 
@@ -559,7 +569,9 @@
                   try {
                     // Remove any unexpected characters that might be causing JSON parse errors
                     const cleanedData = dataContent.trim().replace(/^data:\s*/, '');
-                    console.log('Processing SSE data chunk:', cleanedData);
+                    // Tronchiamo il log per evitare output eccessivo
+                    const logPreview = cleanedData.length > 50 ? cleanedData.substring(0, 50) + '...' : cleanedData;
+                    console.log('Processing SSE data chunk:', logPreview);
                     
                     const eventData = JSON.parse(cleanedData);
                     
@@ -572,12 +584,40 @@
                     }
                     
                     if (eventData.isComplete) {
+                      console.log('Ricevuto segnale di completamento messaggio');
+                      // Marchiamo il messaggio come completato per evitare ulteriori processamenti
+                      messageCompleted = true;
+                      
                       // Final update
                       conversationStep = eventData.conversationStep || conversationStep;
                       isActive = eventData.isActive;
                       if (eventData.collectedData) {
                         collectedData = eventData.collectedData;
                       }
+                      
+                      // Finalizziamo immediatamente lo stato quando riceviamo il segnale di completamento
+                      console.log('Aggiornamento stato conversazione con messaggio completo');
+                      // Salvataggio sicuro del messaggio assistente - previene duplicazioni
+                      const lastMessage = conversationState.messages[conversationState.messages.length - 1];
+                      if (lastMessage && lastMessage.role === 'assistant' && lastMessage.content === fullMessage) {
+                        console.log('Messaggio già presente nello stato, evito duplicazione');
+                      } else {
+                        conversationState.messages.push({ role: 'assistant', content: fullMessage });
+                      }
+                      conversationState.conversationStep = conversationStep;
+                      conversationState.isActive = isActive;
+                      
+                      if (collectedData) {
+                        conversationState.collectedData = collectedData;
+                        
+                        // Se la conversazione è terminata, mostra il pulsante di conferma
+                        if (!isActive) {
+                          addConfirmationButton();
+                        }
+                      }
+                      
+                      // Interrompiamo il loop una volta che abbiamo finalizzato
+                      break;
                     }
                   } catch (err) {
                     console.error('Error parsing SSE data:', err, 'Raw content:', dataContent);
@@ -587,18 +627,30 @@
               
               clearTimeout(streamTimeoutId);
               
-              // Finalize the conversation
-              conversationState.messages.push({ role: 'assistant', content: fullMessage });
-              conversationState.conversationStep = conversationStep;
-              conversationState.isActive = isActive;
-              
-              if (collectedData) {
-                conversationState.collectedData = collectedData;
+              // Finalizziamo lo stato solo se non è già stato finalizzato all'interno del loop
+              if (!messageCompleted) {
+                console.log('Stream terminato senza ricevere isComplete=true, finalizzando stato');
                 
-                // Se la conversazione è terminata, mostra il pulsante di conferma
-                if (!isActive) {
-                  addConfirmationButton();
+                // Salvataggio sicuro del messaggio assistente - previene duplicazioni
+                const lastMessage = conversationState.messages[conversationState.messages.length - 1];
+                if (lastMessage && lastMessage.role === 'assistant' && lastMessage.content === fullMessage) {
+                  console.log('Messaggio già presente nello stato, evito duplicazione');
+                } else {
+                  conversationState.messages.push({ role: 'assistant', content: fullMessage });
                 }
+                conversationState.conversationStep = conversationStep;
+                conversationState.isActive = isActive;
+                
+                if (collectedData) {
+                  conversationState.collectedData = collectedData;
+                  
+                  // Se la conversazione è terminata, mostra il pulsante di conferma
+                  if (!isActive) {
+                    addConfirmationButton();
+                  }
+                }
+              } else {
+                console.log('Stato già finalizzato durante il processamento dello stream');
               }
               
               // Non salviamo più lo stato durante la conversazione

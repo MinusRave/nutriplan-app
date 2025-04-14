@@ -787,12 +787,22 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
         
         res.write(`data: ${eventData}\n\n`);
         
+        // Add debug logging for final message
+        if (isComplete) {
+          console.log(`Invio messaggio finale: isComplete=${isComplete}, conversationStep=${conversationStep}, isActive=${isActive}, hasData=${!!collectedData}`);
+        }
+        
         // Force flush to ensure chunk is sent immediately
         res.flush && res.flush();
         
         // If complete, end the response
         if (isComplete) {
-          res.end();
+          // Aggiungiamo un piccolo ritardo prima di chiudere la connessione
+          // per assicurarci che il client abbia tempo di elaborare l'ultimo chunk
+          setTimeout(() => {
+            console.log('Chiusura dello stream SSE dopo completamento');
+            res.end();
+          }, 100);
         }
       };
       
