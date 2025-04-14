@@ -237,9 +237,12 @@ header {
 .app-title {
   font-family: var(--font-logo);
   color: var(--primary-color);
-  font-size: 2.5rem;
+  font-size: 3.5rem;
+  font-weight: 700;
   margin-bottom: var(--spacing-sm);
-  letter-spacing: 1px;
+  letter-spacing: 2px;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+  text-transform: uppercase;
 }
 
 .subtitle {
@@ -731,7 +734,8 @@ footer .container {
   }
 
   .app-title {
-    font-size: 2rem;
+    font-size: 2.75rem;
+    letter-spacing: 1px;
   }
   
   #chat-container {
@@ -858,19 +862,63 @@ footer .container {
   }
 }
 
-/* ======== FONT LOADING FALLBACK ======== */
-/* Fallback per ITC Benguiat se non disponibile */
+/* ======== FONT LOADING ======== */
+/* ITC Benguiat font for logo and headings */
 @font-face {
   font-family: 'ITC Benguiat';
-  src: local('ITC Benguiat'), 
-       local('Benguiat'),
-       local('Palatino'),
-       local('Times New Roman');
-  font-weight: normal;
+  src: url('../fonts/BenguiatStd-Book.woff2') format('woff2'),
+       url('../fonts/BenguiatStd-Book.otf') format('opentype');
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'ITC Benguiat';
+  src: url('../fonts/BenguiatStd-BookItalic.woff2') format('woff2'),
+       url('../fonts/BenguiatStd-BookItalic.otf') format('opentype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'ITC Benguiat';
+  src: url('../fonts/BenguiatStd-Medium.woff2') format('woff2'),
+       url('../fonts/BenguiatStd-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'ITC Benguiat';
+  src: url('../fonts/BenguiatStd-MediumItalic.woff2') format('woff2'),
+       url('../fonts/BenguiatStd-MediumItalic.otf') format('opentype');
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'ITC Benguiat';
+  src: url('../fonts/BenguiatStd-Bold.woff2') format('woff2'),
+       url('../fonts/BenguiatStd-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'ITC Benguiat';
+  src: url('../fonts/BenguiatStd-BoldItalic.woff2') format('woff2'),
+       url('../fonts/BenguiatStd-BoldItalic.otf') format('opentype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Fallback fonts */
 @font-face {
   font-family: 'Poppins';
   src: local('Poppins'),
