@@ -842,9 +842,9 @@ app.get('/api/conversation/state', csrfProtection, (req, res) => {
   
   console.log(`Richiesta stato conversazione da ${isMobile ? 'mobile' : 'desktop'}, sessionId: ${conversationId.substring(0, 8)}...`);
   
-  // Non ripristiniamo conversazioni incomplete - solo complete con collectedData
-  if (!conversation || !conversation.getState().isCompleted) {
-    console.log(`Conversazione incompleta o non trovata per sessione ${conversationId.substring(0, 8)}. Iniziando nuova conversazione.`);
+  // Ripristiniamo qualsiasi conversazione esistente, anche se incompleta
+  if (!conversation) {
+    console.log(`Conversazione non trovata per sessione ${conversationId.substring(0, 8)}. Iniziando nuova conversazione.`);
     return res.json({
       exists: false,
       isActive: true,
@@ -853,11 +853,11 @@ app.get('/api/conversation/state', csrfProtection, (req, res) => {
     });
   }
   
-  // Solo conversazioni complete con dati raccolti verranno ripristinate
+  // Ripristiniamo la conversazione corrente
   const state = conversation.getState();
   
   // Aggiungiamo informazioni di debug
-  console.log(`Ripristino conversazione completata: ${state.messages.length} messaggi, dati raccolti: ${!!state.collectedData}`);
+  console.log(`Ripristino conversazione: ${state.messages.length} messaggi, step: ${state.conversationStep}`);
   
   res.json({
     exists: true,

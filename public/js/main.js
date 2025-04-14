@@ -525,11 +525,8 @@
               let messageCompleted = false;
               
               while (true) {
-                // Se abbiamo già completato il messaggio, usciamo dal loop
-                if (messageCompleted) {
-                  console.log('Messaggio completato, interrompo processamento ulteriori chunks');
-                  break;
-                }
+                // Continuiamo a processare i chunk anche se il messaggio è completato
+                // Questo permette di gestire i potenziali messaggi aggiuntivi dal server
                 
                 const { value, done } = await reader.read();
                 
@@ -597,13 +594,9 @@
                       
                       // Finalizziamo immediatamente lo stato quando riceviamo il segnale di completamento
                       console.log('Aggiornamento stato conversazione con messaggio completo');
-                      // Salvataggio sicuro del messaggio assistente - previene duplicazioni
-                      const lastMessage = conversationState.messages[conversationState.messages.length - 1];
-                      if (lastMessage && lastMessage.role === 'assistant' && lastMessage.content === fullMessage) {
-                        console.log('Messaggio già presente nello stato, evito duplicazione');
-                      } else {
-                        conversationState.messages.push({ role: 'assistant', content: fullMessage });
-                      }
+                      // IMPORTANTE: Aggiungiamo sempre il messaggio assistente senza verifiche
+                      // per garantire che la conversazione proceda normalmente
+                      conversationState.messages.push({ role: 'assistant', content: fullMessage });
                       conversationState.conversationStep = conversationStep;
                       conversationState.isActive = isActive;
                       
@@ -616,8 +609,8 @@
                         }
                       }
                       
-                      // Interrompiamo il loop una volta che abbiamo finalizzato
-                      break;
+                      // Non interrompiamo il loop per garantire che tutti i chunk vengano processati
+                      // Manteniamo solo il flag per evitare finalizzazioni duplicate
                     }
                   } catch (err) {
                     console.error('Error parsing SSE data:', err, 'Raw content:', dataContent);
@@ -631,13 +624,9 @@
               if (!messageCompleted) {
                 console.log('Stream terminato senza ricevere isComplete=true, finalizzando stato');
                 
-                // Salvataggio sicuro del messaggio assistente - previene duplicazioni
-                const lastMessage = conversationState.messages[conversationState.messages.length - 1];
-                if (lastMessage && lastMessage.role === 'assistant' && lastMessage.content === fullMessage) {
-                  console.log('Messaggio già presente nello stato, evito duplicazione');
-                } else {
-                  conversationState.messages.push({ role: 'assistant', content: fullMessage });
-                }
+                // IMPORTANTE: Aggiungiamo sempre il messaggio assistente senza verifiche
+                // per garantire che la conversazione proceda normalmente
+                conversationState.messages.push({ role: 'assistant', content: fullMessage });
                 conversationState.conversationStep = conversationStep;
                 conversationState.isActive = isActive;
                 
