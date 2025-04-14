@@ -486,6 +486,28 @@ app.get('/', csrfProtection, (req, res) => {
   });
 });
 
+// Static pages
+app.get('/privacy', (req, res) => {
+  res.render('pages/privacy', {
+    currentLang: req.language,
+    t: req.t
+  });
+});
+
+app.get('/terms', (req, res) => {
+  res.render('pages/terms', {
+    currentLang: req.language,
+    t: req.t
+  });
+});
+
+app.get('/contact', (req, res) => {
+  res.render('pages/contact', {
+    currentLang: req.language,
+    t: req.t
+  });
+});
+
 // Cambio lingua
 app.get('/changelanguage/:lng', (req, res) => {
   const supportedLangs = ['it', 'en', 'fr', 'es', 'de', 'pt'];

@@ -1,0 +1,95 @@
+<%
+  const pageTitle = t('pages.contact.title');
+  const content = `
+    <div class="contact-container">
+      <p class="contact-intro">${t('pages.contact.intro')}</p>
+      
+      <div class="contact-grid">
+        <section class="contact-section">
+          <h2>${t('pages.contact.email.title')}</h2>
+          <p>${t('pages.contact.email.content').replace(/\n/g, '<br>')}</p>
+        </section>
+        
+        <section class="contact-section">
+          <h2>${t('pages.contact.phone.title')}</h2>
+          <p>${t('pages.contact.phone.content').replace(/\n/g, '<br>')}</p>
+        </section>
+        
+        <section class="contact-section">
+          <h2>${t('pages.contact.social.title')}</h2>
+          <p>${t('pages.contact.social.content').replace(/\n/g, '<br>')}</p>
+        </section>
+        
+        <section class="contact-section">
+          <h2>${t('pages.contact.address.title')}</h2>
+          <p>${t('pages.contact.address.content').replace(/\n/g, '<br>')}</p>
+        </section>
+      </div>
+      
+      <section class="contact-form-section">
+        <h2>${t('pages.contact.form.title')}</h2>
+        <form id="contact-form" class="contact-form">
+          <div class="form-group">
+            <label for="name">${t('pages.contact.form.name')}</label>
+            <input type="text" id="name" name="name" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="email">${t('pages.contact.form.email')}</label>
+            <input type="email" id="email" name="email" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="message">${t('pages.contact.form.message')}</label>
+            <textarea id="message" name="message" rows="5" required></textarea>
+          </div>
+          
+          <button type="submit" class="btn btn-primary">${t('pages.contact.form.submit')}</button>
+          
+          <div id="form-success" class="form-message success hidden">
+            ${t('pages.contact.form.success')}
+          </div>
+          
+          <div id="form-error" class="form-message error hidden">
+            ${t('pages.contact.form.error')}
+          </div>
+        </form>
+        
+        <script>
+          document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('contact-form');
+            const successMsg = document.getElementById('form-success');
+            const errorMsg = document.getElementById('form-error');
+            
+            if (form) {
+              form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Simulate form submission
+                // In a real application, you would send this data to your server
+                setTimeout(function() {
+                  // Show success message (for demo purposes)
+                  if (successMsg) {
+                    successMsg.classList.remove('hidden');
+                  }
+                  
+                  // Reset form
+                  form.reset();
+                  
+                  // Hide success message after 5 seconds
+                  setTimeout(function() {
+                    if (successMsg) {
+                      successMsg.classList.add('hidden');
+                    }
+                  }, 5000);
+                }, 1000);
+              });
+            }
+          });
+        </script>
+      </section>
+    </div>
+  `;
+%>
+
+<%- include('layout', { pageTitle, content }); %>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="<%= currentLang %>">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title><%= pageTitle %> - DietingWithJoe</title>
+  <meta name="description" content="<%= t('app.description') %>">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/images/favicon/favicon.svg">
+  <link rel="manifest" href="/images/favicon/site.webmanifest">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- App CSS -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Language Selector -->
+  <div class="language-selector" role="navigation" aria-label="<%= t('language.selector') %>">
+    <button class="language-toggle" aria-haspopup="true" aria-expanded="false">
+      <span class="current-lang"><%= currentLang.toUpperCase() %></span>
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="language-icon"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path><line x1="2" y1="12" x2="22" y2="12"></line></svg>
+    </button>
+    <div class="language-dropdown hidden" role="menu">
+      <a href="/changelanguage/it" role="menuitem" class="<%= currentLang === 'it' ? 'active' : '' %>" lang="it">Italiano</a>
+      <a href="/changelanguage/en" role="menuitem" class="<%= currentLang === 'en' ? 'active' : '' %>" lang="en">English</a>
+      <a href="/changelanguage/fr" role="menuitem" class="<%= currentLang === 'fr' ? 'active' : '' %>" lang="fr">Français</a>
+      <a href="/changelanguage/es" role="menuitem" class="<%= currentLang === 'es' ? 'active' : '' %>" lang="es">Español</a>
+      <a href="/changelanguage/de" role="menuitem" class="<%= currentLang === 'de' ? 'active' : '' %>" lang="de">Deutsch</a>
+      <a href="/changelanguage/pt" role="menuitem" class="<%= currentLang === 'pt' ? 'active' : '' %>" lang="pt">Português</a>
+    </div>
+  </div>
+
+  <header>
+    <div class="container">
+      <a href="/" class="app-title">JOE</a>
+      <p class="subtitle"><%= t('app.subtitle') %></p>
+    </div>
+  </header>
+
+  <main class="container page-content">
+    <div class="page-header">
+      <h1><%= pageTitle %></h1>
+    </div>
+    
+    <div class="page-body">
+      <%- content %>
+    </div>
+    
+    <div class="page-navigation">
+      <a href="/" class="btn btn-secondary"><%= t('back_to_home') || 'Back to Home' %></a>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; <%= new Date().getFullYear() %> <%= t('footer.copyright') %></p>
+      <div class="footer-links">
+        <a href="/privacy"><%= t('footer.privacy') %></a>
+        <a href="/terms"><%= t('footer.terms') %></a>
+        <a href="/contact"><%= t('footer.contact') %></a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Language selector functionality
+      var langToggle = document.querySelector('.language-toggle');
+      var langDropdown = document.querySelector('.language-dropdown');
+      
+      if (langToggle && langDropdown) {
+        langToggle.addEventListener('click', function() {
+          const isHidden = langDropdown.classList.toggle('hidden');
+          langToggle.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+        });
+        
+        document.addEventListener('click', function(e) {
+          if (!e.target.closest('.language-selector')) {
+            langDropdown.classList.add('hidden');
+            langToggle.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>

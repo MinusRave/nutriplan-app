@@ -4,6 +4,85 @@
     "subtitle": "Your personalized meal plan",
     "description": "Get a personalized meal plan based on your needs, preferences, and health goals with Joe, your nutrition assistant."
   },
+  "pages": {
+    "privacy": {
+      "title": "Privacy Policy",
+      "intro": "Your privacy is important to us. This policy describes how we collect, use, and protect your personal data.",
+      "collection": {
+        "title": "Data Collection",
+        "content": "We collect the data you provide through the conversation with our nutritional assistant, such as name, age, height, weight, health information, and food preferences."
+      },
+      "use": {
+        "title": "Data Usage",
+        "content": "We use this data exclusively to create a personalized meal plan and improve our services."
+      },
+      "protection": {
+        "title": "Data Protection",
+        "content": "Your data is stored securely and is not shared with third parties without your explicit consent."
+      },
+      "rights": {
+        "title": "Your Rights",
+        "content": "You have the right to access, correct, or request deletion of your personal data at any time."
+      },
+      "contact": {
+        "title": "Privacy Contact",
+        "content": "For any questions regarding your privacy, contact us at privacy@dietingwithjoe.com"
+      }
+    },
+    "terms": {
+      "title": "Terms of Service",
+      "intro": "By using DietingWithJoe, you agree to comply with the following terms and conditions.",
+      "service": {
+        "title": "Service Description",
+        "content": "DietingWithJoe provides a virtual nutritional assistant that creates personalized meal plans based on user-provided information."
+      },
+      "accuracy": {
+        "title": "Information Accuracy",
+        "content": "While we strive to provide accurate nutritional information, the generated meal plans do not replace professional advice from doctors or nutritionists."
+      },
+      "responsibility": {
+        "title": "User Responsibility",
+        "content": "You are responsible for the accuracy of the information you provide and the appropriate use of the generated meal plans."
+      },
+      "limitation": {
+        "title": "Limitation of Liability",
+        "content": "DietingWithJoe is not liable for any damage resulting from the use or inability to use our service."
+      },
+      "changes": {
+        "title": "Terms Changes",
+        "content": "We reserve the right to modify these terms at any time. Changes will be effective immediately upon posting."
+      }
+    },
+    "contact": {
+      "title": "Contact Us",
+      "intro": "We have several ways for you to contact us and get your questions answered.",
+      "email": {
+        "title": "Email",
+        "content": "For general inquiries: info@dietingwithjoe.com\nFor technical support: support@dietingwithjoe.com\nFor privacy concerns: privacy@dietingwithjoe.com"
+      },
+      "phone": {
+        "title": "Phone",
+        "content": "Customer service: +39 02 1234567\nHours: Monday-Friday, 9:00 AM-6:00 PM CET"
+      },
+      "social": {
+        "title": "Social Media",
+        "content": "Follow us on Instagram: @dietingwithjoe\nFacebook: /dietingwithjoe\nTwitter: @dietingwithjoe"
+      },
+      "address": {
+        "title": "Address",
+        "content": "DietingWithJoe Srl\nVia Esempio, 123\n20123 Milan, Italy"
+      },
+      "form": {
+        "title": "Contact Form",
+        "name": "Name",
+        "email": "Email",
+        "message": "Message",
+        "submit": "Submit",
+        "success": "Message sent successfully!",
+        "error": "Error sending message. Please try again later."
+      }
+    }
+  },
   "progress": {
     "title": "Conversation progress",
     "start": "Start",
@@ -59,5 +138,6 @@
     "privacy": "Privacy",
     "terms": "Terms",
     "contact": "Contact"
-  }
+  },
+  "back_to_home": "Back to Home"
 }

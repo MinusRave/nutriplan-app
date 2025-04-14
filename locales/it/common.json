@@ -4,6 +4,85 @@
     "subtitle": "Il tuo piano alimentare personalizzato",
     "description": "Ottieni un piano alimentare personalizzato basato sulle tue esigenze, preferenze e obiettivi di salute con Joe, il tuo assistente nutrizionale."
   },
+  "pages": {
+    "privacy": {
+      "title": "Informativa sulla Privacy",
+      "intro": "La tua privacy è importante per noi. Questa informativa descrive come raccogliamo, utilizziamo e proteggiamo i tuoi dati personali.",
+      "collection": {
+        "title": "Raccolta dei dati",
+        "content": "Raccogliamo i dati che ci fornisci attraverso la conversazione con il nostro assistente nutrizionale, come nome, età, altezza, peso, informazioni sulla salute, e preferenze alimentari."
+      },
+      "use": {
+        "title": "Utilizzo dei dati",
+        "content": "Utilizziamo questi dati esclusivamente per creare un piano alimentare personalizzato e migliorare i nostri servizi."
+      },
+      "protection": {
+        "title": "Protezione dei dati",
+        "content": "I tuoi dati sono conservati in modo sicuro e non vengono condivisi con terze parti senza il tuo consenso esplicito."
+      },
+      "rights": {
+        "title": "I tuoi diritti",
+        "content": "Hai il diritto di accedere, correggere o richiedere la cancellazione dei tuoi dati personali in qualsiasi momento."
+      },
+      "contact": {
+        "title": "Contatti per la privacy",
+        "content": "Per qualsiasi domanda riguardante la tua privacy, contattaci all'indirizzo privacy@dietingwithjoe.com"
+      }
+    },
+    "terms": {
+      "title": "Termini di Servizio",
+      "intro": "Utilizzando DietingWithJoe, accetti di rispettare i seguenti termini e condizioni.",
+      "service": {
+        "title": "Descrizione del servizio",
+        "content": "DietingWithJoe fornisce un'assistente virtuale nutrizionale che crea piani alimentari personalizzati basati sulle informazioni fornite dall'utente."
+      },
+      "accuracy": {
+        "title": "Accuratezza delle informazioni",
+        "content": "Mentre ci sforziamo di fornire informazioni nutrizionali accurate, i piani alimentari generati non sostituiscono la consulenza professionale di medici o nutrizionisti."
+      },
+      "responsibility": {
+        "title": "Responsabilità dell'utente",
+        "content": "Sei responsabile dell'accuratezza delle informazioni che fornisci e dell'uso appropriato dei piani alimentari generati."
+      },
+      "limitation": {
+        "title": "Limitazione di responsabilità",
+        "content": "DietingWithJoe non è responsabile per qualsiasi danno derivante dall'uso o dall'impossibilità di utilizzare il nostro servizio."
+      },
+      "changes": {
+        "title": "Modifiche ai termini",
+        "content": "Ci riserviamo il diritto di modificare questi termini in qualsiasi momento. Le modifiche saranno effettive immediatamente dopo la pubblicazione."
+      }
+    },
+    "contact": {
+      "title": "Contattaci",
+      "intro": "Abbiamo diverse modalità per contattarci e rispondere alle tue domande.",
+      "email": {
+        "title": "Email",
+        "content": "Per domande generali: info@dietingwithjoe.com\nPer supporto tecnico: support@dietingwithjoe.com\nPer privacy: privacy@dietingwithjoe.com"
+      },
+      "phone": {
+        "title": "Telefono",
+        "content": "Servizio clienti: +39 02 1234567\nOrario: Lunedì-Venerdì, 9:00-18:00 CET"
+      },
+      "social": {
+        "title": "Social Media",
+        "content": "Seguici su Instagram: @dietingwithjoe\nFacebook: /dietingwithjoe\nTwitter: @dietingwithjoe"
+      },
+      "address": {
+        "title": "Indirizzo",
+        "content": "DietingWithJoe Srl\nVia Esempio, 123\n20123 Milano, Italia"
+      },
+      "form": {
+        "title": "Modulo di contatto",
+        "name": "Nome",
+        "email": "Email",
+        "message": "Messaggio",
+        "submit": "Invia",
+        "success": "Messaggio inviato con successo!",
+        "error": "Errore nell'invio del messaggio. Riprova più tardi."
+      }
+    }
+  },
   "progress": {
     "title": "Progresso della conversazione",
     "start": "Inizio",
@@ -59,5 +138,6 @@
     "privacy": "Privacy",
     "terms": "Termini",
     "contact": "Contatti"
-  }
+  },
+  "back_to_home": "Torna alla Home"
 }
