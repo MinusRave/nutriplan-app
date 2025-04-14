@@ -48,7 +48,8 @@
     isActive: true,
     conversationStep: 0,
     messages: [],
-    collectedData: null
+    collectedData: null,
+    conversationUUID: null // Aggiungiamo l'UUID univoco della conversazione
   };
   
   // Non ripristiniamo più conversazioni incomplete dal localStorage
@@ -57,6 +58,8 @@
   let inactivityTimer = null;
   let retryCount = 0;
   let isSubmitting = false;
+  let currentStreamId = null; // ID dell'ultima connessione streaming
+  let pendingStreamConnection = null; // Reference all'ultima connessione SSE
 
   // Traduzioni - utilizza quelle fornite dal server o le predefinite
   const defaultTranslations = {
@@ -202,6 +205,11 @@
         // Aggiorna lo stato della conversazione
         conversationState = data;
         
+        // Salviamo l'UUID della conversazione se presente
+        if (data.conversationUUID) {
+          conversationState.conversationUUID = data.conversationUUID;
+        }
+        
         // Reset UI per assicurarci di non duplicare messaggi
         if (elements.chatMessages) {
           elements.chatMessages.innerHTML = '';
@@ -287,6 +295,14 @@
     
     // Gestione della visibilità della pagina
     document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Gestione della chiusura finestra/tab
+    window.addEventListener('beforeunload', function() {
+      // Chiudi esplicitamente qualsiasi connessione streaming attiva
+      if (pendingStreamConnection && pendingStreamConnection.readyState !== 2) { // 2 = CLOSED
+        pendingStreamConnection.close();
+      }
+    });
   }
 
   /**
@@ -386,6 +402,16 @@
         return;
       }
       
+      // Chiudi eventuali connessioni streaming attive
+      if (pendingStreamConnection && pendingStreamConnection.readyState !== 2) { // 2 = CLOSED
+        console.log("Chiusura connessione streaming precedente");
+        pendingStreamConnection.close();
+        pendingStreamConnection = null;
+      }
+      
+      // Reset dello stato
+      currentStreamId = null;
+      
       // Richiedi l'inizio di una nuova conversazione
       const response = await fetch('/api/conversation/start', {
         method: 'POST',
@@ -407,6 +433,11 @@
       conversationState.messages = [
         { role: 'assistant', content: data.message }
       ];
+      
+      // Salviamo l'UUID della conversazione se presente
+      if (data.conversationUUID) {
+        conversationState.conversationUUID = data.conversationUUID;
+      }
       
       // Aggiungi il messaggio di benvenuto
       addAssistantMessage(data.message);
@@ -463,6 +494,16 @@
       elements.sendButton.classList.add('disabled');
     }
     
+    // Chiudi eventuali connessioni streaming attive
+    if (pendingStreamConnection && pendingStreamConnection.readyState !== 2) { // 2 = CLOSED
+      console.log("Chiusura connessione streaming precedente");
+      pendingStreamConnection.close();
+      pendingStreamConnection = null;
+    }
+    
+    // Reset dello stato
+    currentStreamId = null;
+    
     // Mostra l'indicatore di digitazione avanzato
     showTypingIndicator(true); // true = modalità avanzata
     
@@ -479,7 +520,7 @@
       
       const messageTextElement = assistantMessageElement.querySelector('.message-text');
       
-      // Enable streaming for real-time responses
+      // Supportiamo lo streaming SSE
       const supportsSSE = true;
       
       if (supportsSSE) {
@@ -487,14 +528,16 @@
         // Imposta un timeout per il fallback
         const streamTimeoutId = setTimeout(() => {
           console.warn('Stream timeout, falling back to traditional request');
+          // Elimina il messaggio placeholder creato per lo streaming
+          if (assistantMessageElement && elements.chatMessages) {
+            elements.chatMessages.removeChild(assistantMessageElement);
+          }
           handleTraditionalRequest(userInput);
         }, APP_CONFIG.RESPONSE_TIMEOUT);
         
         try {
-          // Crea un EventSource per lo streaming (SSE)
-          const eventUrl = `/api/conversation/message`;
-          
           // Prepara per la richiesta streaming
+          const eventUrl = `/api/conversation/message`;
           
           // Usa fetch per iniziare lo streaming
           const response = await fetch(eventUrl, {
@@ -525,9 +568,6 @@
               let messageCompleted = false;
               
               while (true) {
-                // Continuiamo a processare i chunk anche se il messaggio è completato
-                // Questo permette di gestire i potenziali messaggi aggiuntivi dal server
-                
                 const { value, done } = await reader.read();
                 
                 if (done) {
@@ -572,6 +612,26 @@
                     
                     const eventData = JSON.parse(cleanedData);
                     
+                    // Verifica se c'è un ID richiesta e gestisci di conseguenza
+                    if (eventData.requestId) {
+                      // Se è il primo chunk, salva l'ID
+                      if (currentStreamId === null) {
+                        currentStreamId = eventData.requestId;
+                      } 
+                      // Se l'ID non corrisponde, ignora questo chunk (è da una richiesta precedente)
+                      else if (currentStreamId !== eventData.requestId) {
+                        console.log(`Ignorato chunk da richiesta diversa: ${eventData.requestId} (corrente: ${currentStreamId})`);
+                        continue;
+                      }
+                    }
+                    
+                    // Gestione richiesta di chiusura forzata
+                    if (eventData.forceClose) {
+                      console.log('Ricevuta richiesta di chiusura forzata della connessione');
+                      break;
+                    }
+                    
+                    // Elabora il chunk normale
                     if (eventData.chunk) {
                       fullMessage += eventData.chunk;
                       if (messageTextElement) {
@@ -609,8 +669,8 @@
                         }
                       }
                       
-                      // Non interrompiamo il loop per garantire che tutti i chunk vengano processati
-                      // Manteniamo solo il flag per evitare finalizzazioni duplicate
+                      // Interrompiamo il ciclo quando riceviamo il segnale di completamento
+                      break;
                     }
                   } catch (err) {
                     console.error('Error parsing SSE data:', err, 'Raw content:', dataContent);
@@ -659,6 +719,10 @@
               // Cleanup
               hideTypingIndicator();
               isSubmitting = false;
+              
+              // Reset del riferimento alla connessione streaming
+              pendingStreamConnection = null;
+              currentStreamId = null;
               
               // Riabilita input e pulsante
               if (elements.chatInput) {
@@ -857,7 +921,8 @@
         userData: conversationState.collectedData,
         conversationData: {
           messages: conversationState.messages,
-          language: currentLang
+          language: currentLang,
+          conversationUUID: conversationState.conversationUUID
         }
       };
       
@@ -936,8 +1001,28 @@
           
           // Implementa cancellazione (in una versione futura)
           cancelButton.addEventListener('click', () => {
-            // Qui andrebbe la logica di cancellazione
+            // Chiudi eventuali connessioni streaming attive
+            if (pendingStreamConnection && pendingStreamConnection.readyState !== 2) {
+              console.log("Annullamento della richiesta in corso");
+              pendingStreamConnection.close();
+              pendingStreamConnection = null;
+              currentStreamId = null;
+            }
+            
             hideTypingIndicator();
+            isSubmitting = false;
+            
+            // Riabilita input e pulsante
+            if (elements.chatInput) {
+              elements.chatInput.disabled = false;
+              elements.chatInput.classList.remove('disabled');
+              elements.chatInput.focus();
+            }
+            
+            if (elements.sendButton) {
+              elements.sendButton.disabled = false;
+              elements.sendButton.classList.remove('disabled');
+            }
           });
         }
       }
@@ -1150,6 +1235,22 @@
     if (document.visibilityState === 'visible') {
       // Reset del timer quando la pagina torna visibile
       resetInactivityTimer();
+    } else if (document.visibilityState === 'hidden') {
+      // Quando la pagina diventa invisibile, considera di chiudere le connessioni aperte
+      if (pendingStreamConnection && pendingStreamConnection.readyState !== 2) {
+        console.log("Pagina nascosta, mantengo la connessione aperta ma imposto un timeout");
+        // Impostiamo un timeout più breve per chiudere le connessioni se la pagina resta nascosta
+        setTimeout(() => {
+          if (document.visibilityState === 'hidden' && 
+              pendingStreamConnection && 
+              pendingStreamConnection.readyState !== 2) {
+            console.log("Chiusura connessione dopo periodo di inattività con pagina nascosta");
+            pendingStreamConnection.close();
+            pendingStreamConnection = null;
+            currentStreamId = null;
+          }
+        }, 60000); // 1 minuto con pagina nascosta
+      }
     }
   }
 
@@ -1157,6 +1258,14 @@
    * Nuova conversazione
    */
   function startNewConversation() {
+    // Chiudi eventuali connessioni streaming attive
+    if (pendingStreamConnection && pendingStreamConnection.readyState !== 2) {
+      console.log("Chiusura connessione streaming per nuova conversazione");
+      pendingStreamConnection.close();
+      pendingStreamConnection = null;
+      currentStreamId = null;
+    }
+    
     // Reset degli elementi UI
     if (elements.chatMessages) {
       elements.chatMessages.innerHTML = '';
@@ -1176,7 +1285,8 @@
       isActive: true,
       conversationStep: 0,
       messages: [],
-      collectedData: null
+      collectedData: null,
+      conversationUUID: null
     };
     
     // Rimuovi i dati dal localStorage

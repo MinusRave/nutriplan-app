@@ -14,6 +14,7 @@ const UAParser = require('ua-parser-js');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const axios = require('axios');
+const { v4: uuidv4 } = require('uuid'); // Aggiungi dipendenza per generare ID univoci
 
 // Configurazione Anthropic (Claude)
 const anthropic = new Anthropic({
@@ -154,12 +155,15 @@ app.use((req, res, next) => {
 
 // Map per memorizzare le conversazioni attive
 const conversations = new Map();
+// Map per memorizzare le connessioni streaming attive
+const activeStreamConnections = new Map();
 
 /**
  * Classe per gestire una conversazione con Claude
  */
 class NutritionalConversation {
   constructor(language) {
+    this.id = uuidv4(); // Genera un ID univoco per ogni conversazione
     this.language = language || 'it';
     this.systemPrompt = this.getSystemPrompt();
     this.messages = [];
@@ -168,6 +172,7 @@ class NutritionalConversation {
     this.collectedData = null;
     this.lastInteraction = Date.now();
     this.conversationStep = 1;
+    this.activeStreams = new Set(); // Per tenere traccia delle connessioni di streaming attive
   }
 
   /**
@@ -230,7 +235,7 @@ class NutritionalConversation {
     {
       "nome": "valore",
       "datiPersonali": {
-		"nome" : valore
+        "nome" : valore
         "eta": valore,
         "genere": "valore",
         "peso": valore,
@@ -364,8 +369,9 @@ class NutritionalConversation {
    * Aggiunge un messaggio alla conversazione
    * @param {string} content - Il messaggio dell'utente
    * @param {function} streamCallback - Callback opzionale per lo streaming della risposta
+   * @param {string} requestId - ID univoco della richiesta per evitare duplicazioni
    */
-  async addMessage(content, streamCallback = null) {
+  async addMessage(content, streamCallback = null, requestId = null) {
     // Aggiorna timestamp ultima interazione
     this.lastInteraction = Date.now();
 
@@ -386,6 +392,49 @@ class NutritionalConversation {
       let isStreaming = !!streamCallback;
 
       if (isStreaming) {
+        // Se è fornito un requestId, memorizziamo la connessione
+        if (requestId) {
+          // Registriamo la nuova stream e chiudiamo eventuali stream precedenti
+          if (this.activeStreams.size > 0) {
+            console.log(`Chiusura di ${this.activeStreams.size} connessioni streaming precedenti per conversazione ${this.id}`);
+            
+            // Crea una copia dell'insieme per evitare problemi durante l'iterazione
+            const previousStreamIds = [...this.activeStreams];
+            
+            // Chiudi ogni connessione precedente
+            for (const streamId of previousStreamIds) {
+              // Recupera e chiudi la connessione dal registro globale
+              const previousConnection = activeStreamConnections.get(streamId);
+              if (previousConnection && previousConnection.res && !previousConnection.res.finished) {
+                console.log(`Chiusura connessione streaming: ${streamId}`);
+                try {
+                  // Invia un messaggio di chiusura
+                  previousConnection.res.write(`data: {"isComplete":true,"forceClose":true}\n\n`);
+                  previousConnection.res.end();
+                } catch (e) {
+                  console.error(`Errore nella chiusura della connessione: ${e.message}`);
+                }
+                
+                // Rimuovi dal registro delle connessioni attive
+                activeStreamConnections.delete(streamId);
+              }
+              
+              // Rimuovi dall'insieme delle stream attive per questa conversazione
+              this.activeStreams.delete(streamId);
+            }
+          }
+          
+          // Registra la nuova connessione
+          this.activeStreams.add(requestId);
+          activeStreamConnections.set(requestId, { 
+            res: streamCallback.res, 
+            timestamp: Date.now(),
+            conversationId: this.id
+          });
+          
+          console.log(`Registrata nuova connessione streaming: ${requestId} per conversazione ${this.id}`);
+        }
+        
         // Streaming call
         const stream = await anthropic.messages.stream({
           model: 'claude-3-7-sonnet-20250219',
@@ -406,12 +455,21 @@ class NutritionalConversation {
             
             // Send each chunk to the client in real-time
             if (streamCallback) {
-              streamCallback({
-                chunk: chunkText,
-                fullContent,
-                isComplete: false,
-                conversationStep: this.conversationStep
-              });
+              // Verifica se la connessione è ancora attiva prima di inviare
+              if (this.activeStreams.has(requestId)) {
+                const streamData = {
+                  chunk: chunkText,
+                  fullContent,
+                  isComplete: false,
+                  conversationStep: this.conversationStep,
+                  requestId: requestId
+                };
+                
+                streamCallback(streamData);
+              } else {
+                console.log(`Connessione ${requestId} non più attiva, interruzione streaming`);
+                break;
+              }
             }
           }
         }
@@ -420,13 +478,20 @@ class NutritionalConversation {
         responseContent = fullContent;
         
         // Final update with complete flag
-        if (streamCallback) {
-          streamCallback({
+        if (streamCallback && this.activeStreams.has(requestId)) {
+          const finalData = {
             chunk: '',
             fullContent: responseContent,
             isComplete: true,
-            conversationStep: this.conversationStep
-          });
+            conversationStep: this.conversationStep,
+            requestId: requestId
+          };
+          
+          streamCallback(finalData);
+          
+          // Dopo l'invio del messaggio finale, rimuovi la connessione
+          this.activeStreams.delete(requestId);
+          activeStreamConnections.delete(requestId);
         }
       } else {
         // Non-streaming call (fallback)
@@ -556,6 +621,36 @@ class NutritionalConversation {
       })
     };
   }
+  
+  /**
+   * Chiude tutte le connessioni di streaming attive per questa conversazione
+   */
+  closeAllStreams() {
+    if (this.activeStreams.size > 0) {
+      console.log(`Chiusura di ${this.activeStreams.size} connessioni streaming per conversazione ${this.id}`);
+      
+      // Crea una copia per evitare problemi durante l'iterazione
+      const streamIds = [...this.activeStreams];
+      
+      // Chiudi ogni connessione
+      for (const streamId of streamIds) {
+        const connection = activeStreamConnections.get(streamId);
+        if (connection && connection.res && !connection.res.finished) {
+          try {
+            connection.res.write(`data: {"isComplete":true,"forceClose":true}\n\n`);
+            connection.res.end();
+          } catch (e) {
+            console.error(`Errore nella chiusura della connessione: ${e.message}`);
+          }
+          
+          // Rimuovi dai registri
+          activeStreamConnections.delete(streamId);
+        }
+        
+        this.activeStreams.delete(streamId);
+      }
+    }
+  }
 }
 
 // ROUTING
@@ -665,14 +760,22 @@ app.get('/changelanguage/:lng', (req, res) => {
 // API: Inizia una nuova conversazione
 app.post('/api/conversation/start', apiLimiter, csrfProtection, (req, res) => {
   try {
-    const conversationId = req.session.id;
+    const sessionId = req.session.id;
     const language = req.language || 'it';
     
+    // Verifica se esiste già una conversazione per questa sessione
+    let conversation = conversations.get(sessionId);
+    
+    // Se la conversazione esiste, chiudi tutte le connessioni streaming aperte
+    if (conversation) {
+      conversation.closeAllStreams();
+    }
+    
     // Crea una nuova conversazione
-    const conversation = new NutritionalConversation(language);
+    conversation = new NutritionalConversation(language);
     
     // Salvala nella mappa
-    conversations.set(conversationId, conversation);
+    conversations.set(sessionId, conversation);
     
     // Prepara il messaggio di benvenuto (specifico per lingua)
     let welcomeMessage;
@@ -703,10 +806,12 @@ app.post('/api/conversation/start', apiLimiter, csrfProtection, (req, res) => {
       content: welcomeMessage
     });
     
+    // Salva l'ID univoco della conversazione nella risposta
     res.json({
-      conversationId,
+      conversationId: sessionId,
       message: welcomeMessage,
-      conversationStep: 1
+      conversationStep: 1,
+      conversationUUID: conversation.id
     });
   } catch (error) {
     console.error('Errore nell\'avvio della conversazione:', error);
@@ -721,23 +826,27 @@ app.post('/api/conversation/start', apiLimiter, csrfProtection, (req, res) => {
 app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, res) => {
   try {
     const { message, stream } = req.body;
-    const conversationId = req.session.id;
+    const sessionId = req.session.id;
     
     if (!message) {
       return res.status(400).json({ error: req.t('error.invalidMessage') });
     }
     
     // Ottieni la conversazione corrente o creane una nuova
-    let conversation = conversations.get(conversationId);
+    let conversation = conversations.get(sessionId);
     if (!conversation) {
       conversation = new NutritionalConversation(req.language);
-      conversations.set(conversationId, conversation);
+      conversations.set(sessionId, conversation);
     }
     
     // Determina se usare streaming in base al parametro nella richiesta
     const useStreaming = stream === true;
     
     if (useStreaming) {
+      // Genera un ID univoco per questa richiesta di streaming
+      const requestId = `${sessionId}-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+      console.log(`Nuova richiesta di streaming: ${requestId} per conversazione ${conversation.id}`);
+      
       // Set headers for SSE
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
@@ -746,9 +855,33 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
       res.setHeader('Access-Control-Allow-Origin', '*'); // Allow cross-origin requests
       res.flushHeaders(); // Immediately send headers
       
+      // Crea un timeout per la risposta
+      const responseTimeout = setTimeout(() => {
+        console.warn(`Timeout per richiesta streaming ${requestId}`);
+        
+        // Invia un messaggio di errore al client
+        const errorData = JSON.stringify({
+          error: 'Timeout nella generazione della risposta',
+          isComplete: true
+        });
+        
+        res.write(`data: ${errorData}\n\n`);
+        res.end();
+        
+        // Rimuovi dai registri
+        conversation.activeStreams.delete(requestId);
+        activeStreamConnections.delete(requestId);
+      }, 60000); // 60 secondi
+      
       // Streaming callback function
       const sendStreamChunk = (data) => {
-        const { chunk, fullContent, isComplete, conversationStep } = data;
+        const { chunk, fullContent, isComplete, conversationStep, requestId: streamRequestId } = data;
+        
+        // Verifica che la risposta sia ancora aperta e non conclusa
+        if (res.finished) {
+          console.log(`Risposta già conclusa per ${streamRequestId}, ignoro il chunk`);
+          return;
+        }
         
         // Prepare visible content (remove DATI_COMPLETI tag if present)
         let visibleContent = fullContent;
@@ -775,8 +908,8 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
         }
         
         // Send the chunk as an event - proper SSE format
-        // Ensure format follows the SSE specification exactly
         const eventData = JSON.stringify({
+          requestId: streamRequestId,
           chunk,
           message: visibleContent,
           isComplete,
@@ -790,24 +923,48 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
         // Add debug logging for final message
         if (isComplete) {
           console.log(`Invio messaggio finale: isComplete=${isComplete}, conversationStep=${conversationStep}, isActive=${isActive}, hasData=${!!collectedData}`);
+          
+          // Pulisci il timeout
+          clearTimeout(responseTimeout);
+          
+          // Chiudi la risposta SSE
+          res.end();
+          
+          // Rimuovi la connessione dai registri
+          conversation.activeStreams.delete(requestId);
+          activeStreamConnections.delete(requestId);
         }
         
         // Force flush to ensure chunk is sent immediately
         res.flush && res.flush();
-        
-        // If complete, end the response
-        if (isComplete) {
-          // Aggiungiamo un piccolo ritardo prima di chiudere la connessione
-          // per assicurarci che il client abbia tempo di elaborare l'ultimo chunk
-          setTimeout(() => {
-            console.log('Chiusura dello stream SSE dopo completamento');
-            res.end();
-          }, 100);
-        }
       };
       
-      // Start the streaming conversation
-      await conversation.addMessage(message, sendStreamChunk);
+      // Memorizza una reference alla risposta per poterla chiudere se necessario
+      sendStreamChunk.res = res;
+      
+      try {
+        // Start the streaming conversation
+        await conversation.addMessage(message, sendStreamChunk, requestId);
+      } catch (error) {
+        console.error(`Errore durante lo streaming per ${requestId}:`, error);
+        
+        // Invia un messaggio di errore al client
+        if (!res.finished) {
+          const errorData = JSON.stringify({
+            error: 'Errore nella generazione della risposta',
+            errorMessage: process.env.NODE_ENV === 'development' ? error.message : null,
+            isComplete: true
+          });
+          
+          res.write(`data: ${errorData}\n\n`);
+          res.end();
+        }
+        
+        // Rimuovi dai registri
+        clearTimeout(responseTimeout);
+        conversation.activeStreams.delete(requestId);
+        activeStreamConnections.delete(requestId);
+      }
     } else {
       // Non-streaming response (traditional API)
       const response = await conversation.addMessage(message);
@@ -836,15 +993,15 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
 
 // API: Ottieni stato conversazione
 app.get('/api/conversation/state', csrfProtection, (req, res) => {
-  const conversationId = req.session.id;
-  const conversation = conversations.get(conversationId);
+  const sessionId = req.session.id;
+  const conversation = conversations.get(sessionId);
   const isMobile = req.clientInfo.isMobile;
   
-  console.log(`Richiesta stato conversazione da ${isMobile ? 'mobile' : 'desktop'}, sessionId: ${conversationId.substring(0, 8)}...`);
+  console.log(`Richiesta stato conversazione da ${isMobile ? 'mobile' : 'desktop'}, sessionId: ${sessionId.substring(0, 8)}...`);
   
   // Ripristiniamo qualsiasi conversazione esistente, anche se incompleta
   if (!conversation) {
-    console.log(`Conversazione non trovata per sessione ${conversationId.substring(0, 8)}. Iniziando nuova conversazione.`);
+    console.log(`Conversazione non trovata per sessione ${sessionId.substring(0, 8)}. Iniziando nuova conversazione.`);
     return res.json({
       exists: false,
       isActive: true,
@@ -862,8 +1019,9 @@ app.get('/api/conversation/state', csrfProtection, (req, res) => {
   res.json({
     exists: true,
     ...state,
+    conversationUUID: conversation.id,
     _debug: {
-      sessionId: conversationId.substring(0, 8),
+      sessionId: sessionId.substring(0, 8),
       isMobile: isMobile,
       timestamp: new Date().toISOString()
     }
@@ -884,6 +1042,15 @@ app.post('/api/submit', apiLimiter, csrfProtection, [
   
   try {
     const { userData, conversationData } = req.body;
+    const sessionId = req.session.id;
+    
+    // Recupera la conversazione
+    const conversation = conversations.get(sessionId);
+    
+    if (conversation) {
+      // Chiudi tutte le connessioni streaming attive
+      conversation.closeAllStreams();
+    }
     
     // Preparazione del payload
     const payload = {
@@ -917,8 +1084,7 @@ app.post('/api/submit', apiLimiter, csrfProtection, [
     }
     
     // Reset della conversazione
-    const conversationId = req.session.id;
-    conversations.delete(conversationId);
+    conversations.delete(sessionId);
     
     res.json({ success: true, message: req.t('submission.success') });
   } catch (error) {
@@ -930,19 +1096,55 @@ app.post('/api/submit', apiLimiter, csrfProtection, [
   }
 });
 
-// Pulizia delle conversazioni inattive
+// Pulizia delle conversazioni inattive e delle connessioni streaming
 setInterval(() => {
   const now = Date.now();
-  const INACTIVE_THRESHOLD = 3 * 24 * 60 * 60 * 1000; // 3 giorni invece di 24 ore
+  const INACTIVE_THRESHOLD = 3 * 24 * 60 * 60 * 1000; // 3 giorni
+  const STREAM_TIMEOUT = 5 * 60 * 1000; // 5 minuti
   
+  // Pulizia connessioni streaming
+  for (const [id, connection] of activeStreamConnections.entries()) {
+    const streamAge = now - connection.timestamp;
+    if (streamAge > STREAM_TIMEOUT) {
+      console.log(`Chiusura connessione streaming ${id} per timeout`);
+      try {
+        if (connection.res && !connection.res.finished) {
+          connection.res.write(`data: {"isComplete":true,"forceClose":true,"reason":"timeout"}\n\n`);
+          connection.res.end();
+        }
+      } catch (e) {
+        console.error(`Errore nella chiusura della connessione: ${e.message}`);
+      }
+      
+      // Rimuovi dai registri
+      activeStreamConnections.delete(id);
+      
+      // Rimuovi anche dal registro della conversazione se esiste
+      if (connection.conversationId) {
+        const conversation = [...conversations.values()].find(c => c.id === connection.conversationId);
+        if (conversation) {
+          conversation.activeStreams.delete(id);
+        }
+      }
+    }
+  }
+  
+  // Pulizia conversazioni inattive
   for (const [id, conversation] of conversations.entries()) {
     const inactiveTime = now - conversation.lastInteraction;
     if (inactiveTime > INACTIVE_THRESHOLD) {
+      // Chiudi tutte le connessioni streaming
+      conversation.closeAllStreams();
+      
+      // Rimuovi la conversazione
       conversations.delete(id);
       console.log(`Conversazione ${id} rimossa per inattività`);
     }
   }
-}, 60 * 60 * 1000); // Controlla ogni ora
+  
+  // Log statistiche
+  console.log(`Statistiche pulizia: ${conversations.size} conversazioni, ${activeStreamConnections.size} connessioni streaming`);
+}, 15 * 60 * 1000); // Controlla ogni 15 minuti
 
 // Avvio del server
 const PORT = process.env.PORT || 3000;
