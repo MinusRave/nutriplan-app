@@ -701,11 +701,11 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
     
     if (useStreaming) {
       // Set headers for SSE
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
-      });
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no'); // Important for NGINX proxying
+      res.flushHeaders(); // Immediately send headers
       
       // Streaming callback function
       const sendStreamChunk = (data) => {
@@ -735,7 +735,7 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
           }
         }
         
-        // Send the chunk as an event
+        // Send the chunk as an event - proper SSE format
         res.write(`data: ${JSON.stringify({
           chunk,
           message: visibleContent,
@@ -744,6 +744,9 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
           isActive,
           ...(collectedData && { collectedData })
         })}\n\n`);
+        
+        // Force flush to ensure chunk is sent immediately
+        res.flush && res.flush();
         
         // If complete, end the response
         if (isComplete) {

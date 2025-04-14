@@ -447,8 +447,8 @@
       
       const messageTextElement = assistantMessageElement.querySelector('.message-text');
       
-      // Determina se usare streaming in base alla feature detection
-      const supportsSSE = 'EventSource' in window;
+      // For now, disable streaming until we fix all issues
+      const supportsSSE = false; // Temporary disable streaming
       
       if (supportsSSE) {
         // STREAMING APPROACH
@@ -462,17 +462,13 @@
           // Crea un EventSource per lo streaming (SSE)
           const eventUrl = `/api/conversation/message`;
           
-          // Prepara il payload in formato URL-encoded
-          const formData = new URLSearchParams();
-          formData.append('message', userInput);
-          formData.append('stream', 'true');
-          formData.append('_csrf', elements.csrfToken.value);
+          // Prepara per la richiesta streaming
           
           // Usa fetch per iniziare lo streaming
           const response = await fetch(eventUrl, {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
+              'Content-Type': 'application/json',
               'X-CSRF-Token': elements.csrfToken.value
             },
             body: JSON.stringify({ message: userInput, stream: true })
@@ -508,11 +504,23 @@
                 buffer = lines.pop() || ''; // Keep the last incomplete chunk in buffer
                 
                 for (const line of lines) {
-                  if (!line.trim() || !line.startsWith('data: ')) continue;
+                  if (!line.trim()) continue;
+                  
+                  // Extract the data part (handle different SSE formats)
+                  let dataContent = line;
+                  
+                  if (line.startsWith('data: ')) {
+                    dataContent = line.replace(/^data: /, '');
+                  } else if (line.includes('\ndata: ')) {
+                    const dataMatch = line.match(/data: (.*)/);
+                    if (dataMatch && dataMatch[1]) {
+                      dataContent = dataMatch[1];
+                    }
+                  }
                   
                   try {
-                    const jsonStr = line.replace(/^data: /, '');
-                    const eventData = JSON.parse(jsonStr);
+                    console.log('Received SSE data:', dataContent);
+                    const eventData = JSON.parse(dataContent);
                     
                     if (eventData.chunk) {
                       fullMessage += eventData.chunk;
@@ -531,7 +539,7 @@
                       }
                     }
                   } catch (err) {
-                    console.error('Error parsing SSE data:', err);
+                    console.error('Error parsing SSE data:', err, 'Raw content:', dataContent);
                   }
                 }
               }
