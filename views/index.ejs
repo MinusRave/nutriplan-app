@@ -87,18 +87,18 @@
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="language-icon"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path><line x1="2" y1="12" x2="22" y2="12"></line></svg>
     </button>
     <div class="language-dropdown hidden" role="menu">
-      <a href="/changelanguage/it" role="menuitem" class="<%= currentLang === 'it' ? 'active' : '' %>" lang="it">Italiano</a>
-      <a href="/changelanguage/en" role="menuitem" class="<%= currentLang === 'en' ? 'active' : '' %>" lang="en">English</a>
-      <a href="/changelanguage/fr" role="menuitem" class="<%= currentLang === 'fr' ? 'active' : '' %>" lang="fr">Français</a>
-      <a href="/changelanguage/es" role="menuitem" class="<%= currentLang === 'es' ? 'active' : '' %>" lang="es">Español</a>
-      <a href="/changelanguage/de" role="menuitem" class="<%= currentLang === 'de' ? 'active' : '' %>" lang="de">Deutsch</a>
-      <a href="/changelanguage/pt" role="menuitem" class="<%= currentLang === 'pt' ? 'active' : '' %>" lang="pt">Português</a>
+      <a href="/changelanguage/it?redirect=/" role="menuitem" class="<%= currentLang === 'it' ? 'active' : '' %>" lang="it">Italiano</a>
+      <a href="/changelanguage/en?redirect=/" role="menuitem" class="<%= currentLang === 'en' ? 'active' : '' %>" lang="en">English</a>
+      <a href="/changelanguage/fr?redirect=/" role="menuitem" class="<%= currentLang === 'fr' ? 'active' : '' %>" lang="fr">Français</a>
+      <a href="/changelanguage/es?redirect=/" role="menuitem" class="<%= currentLang === 'es' ? 'active' : '' %>" lang="es">Español</a>
+      <a href="/changelanguage/de?redirect=/" role="menuitem" class="<%= currentLang === 'de' ? 'active' : '' %>" lang="de">Deutsch</a>
+      <a href="/changelanguage/pt?redirect=/" role="menuitem" class="<%= currentLang === 'pt' ? 'active' : '' %>" lang="pt">Português</a>
     </div>
   </div>
 
   <header>
     <div class="container">
-      <div class="app-title">JOE</div>
+      <a href="/" class="app-title">JOE</a>
       <p class="subtitle"><%= t('app.subtitle') %></p>
     </div>
   </header>
@@ -142,19 +142,19 @@
       </div>
     </div>
 
-    <!-- Info Cards (opzionali) -->
+    <!-- Info Cards -->
     <div class="info-section">
       <div class="info-card">
         <h3>Deficiency symptoms</h3>
         <p>Fatigue, weak immunity, and muscle cramps can be signs of missing key nutrients.</p>
-        <a href="#" class="cta">Signs of deficiency <span class="pointer">👆</span></a>
+        <a href="/contact" class="cta">Contact our experts <span class="pointer">👆</span></a>
         <span class="instagram-handle">@dietingwithjoe</span>
       </div>
 
       <div class="info-card">
         <h3>Learn how to balance your diet</h3>
         <p>Discover how to create a perfectly balanced nutrition plan that works for your lifestyle and goals.</p>
-        <a href="#" class="cta">Check out the full story <span class="pointer">👆</span></a>
+        <a href="/terms" class="cta">Learn about our services <span class="pointer">👆</span></a>
         <span class="instagram-handle">@dietingwithjoe</span>
       </div>
     </div>
@@ -185,9 +185,9 @@
     <div class="container">
       <p>&copy; <%= new Date().getFullYear() %> <%= t('footer.copyright') %></p>
       <div class="footer-links">
-        <a href="#privacy-policy"><%= t('footer.privacy') %></a>
-        <a href="#terms"><%= t('footer.terms') %></a>
-        <a href="#contact"><%= t('footer.contact') %></a>
+        <a href="/privacy"><%= t('footer.privacy') %></a>
+        <a href="/terms"><%= t('footer.terms') %></a>
+        <a href="/contact"><%= t('footer.contact') %></a>
       </div>
     </div>
   </footer>
