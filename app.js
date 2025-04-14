@@ -487,24 +487,76 @@ app.get('/', csrfProtection, (req, res) => {
 });
 
 // Static pages
+app.engine('ejs', require('ejs').renderFile);
+
+// Helper function to capture included content
+app.locals.captureContent = function(template, data) {
+  return require('ejs').render(template, data);
+};
+
 app.get('/privacy', (req, res) => {
-  res.render('pages/privacy', {
+  // First render the template content
+  const templatePath = path.join(__dirname, 'views', 'pages', 'privacy.ejs');
+  const templateContent = require('fs').readFileSync(templatePath, 'utf8');
+  const data = {
+    t: req.t,
+    currentLang: req.language
+  };
+  
+  // Capture the content
+  const html = require('ejs').render(templateContent, data);
+  
+  // Then render with the layout
+  res.render('pages/layout', {
+    pageTitle: req.t('pages.privacy.title'),
+    pageContent: html,
     currentLang: req.language,
-    t: req.t
+    t: req.t,
+    originalUrl: req.originalUrl
   });
 });
 
 app.get('/terms', (req, res) => {
-  res.render('pages/terms', {
+  // First render the template content
+  const templatePath = path.join(__dirname, 'views', 'pages', 'terms.ejs');
+  const templateContent = require('fs').readFileSync(templatePath, 'utf8');
+  const data = {
+    t: req.t,
+    currentLang: req.language
+  };
+  
+  // Capture the content
+  const html = require('ejs').render(templateContent, data);
+  
+  // Then render with the layout
+  res.render('pages/layout', {
+    pageTitle: req.t('pages.terms.title'),
+    pageContent: html,
     currentLang: req.language,
-    t: req.t
+    t: req.t,
+    originalUrl: req.originalUrl
   });
 });
 
 app.get('/contact', (req, res) => {
-  res.render('pages/contact', {
+  // First render the template content
+  const templatePath = path.join(__dirname, 'views', 'pages', 'contact.ejs');
+  const templateContent = require('fs').readFileSync(templatePath, 'utf8');
+  const data = {
+    t: req.t,
+    currentLang: req.language
+  };
+  
+  // Capture the content
+  const html = require('ejs').render(templateContent, data);
+  
+  // Then render with the layout
+  res.render('pages/layout', {
+    pageTitle: req.t('pages.contact.title'),
+    pageContent: html,
     currentLang: req.language,
-    t: req.t
+    t: req.t,
+    originalUrl: req.originalUrl
   });
 });
 
@@ -512,13 +564,14 @@ app.get('/contact', (req, res) => {
 app.get('/changelanguage/:lng', (req, res) => {
   const supportedLangs = ['it', 'en', 'fr', 'es', 'de', 'pt'];
   const lng = req.params.lng;
+  const redirect = req.query.redirect || '/';
   
   if (supportedLangs.includes(lng)) {
     res.cookie('i18next', lng);
     req.language = lng;
   }
   
-  res.redirect('back');
+  res.redirect(redirect);
 });
 
 // API: Inizia una nuova conversazione

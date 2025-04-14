@@ -26,12 +26,12 @@
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="language-icon"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path><line x1="2" y1="12" x2="22" y2="12"></line></svg>
     </button>
     <div class="language-dropdown hidden" role="menu">
-      <a href="/changelanguage/it" role="menuitem" class="<%= currentLang === 'it' ? 'active' : '' %>" lang="it">Italiano</a>
-      <a href="/changelanguage/en" role="menuitem" class="<%= currentLang === 'en' ? 'active' : '' %>" lang="en">English</a>
-      <a href="/changelanguage/fr" role="menuitem" class="<%= currentLang === 'fr' ? 'active' : '' %>" lang="fr">Français</a>
-      <a href="/changelanguage/es" role="menuitem" class="<%= currentLang === 'es' ? 'active' : '' %>" lang="es">Español</a>
-      <a href="/changelanguage/de" role="menuitem" class="<%= currentLang === 'de' ? 'active' : '' %>" lang="de">Deutsch</a>
-      <a href="/changelanguage/pt" role="menuitem" class="<%= currentLang === 'pt' ? 'active' : '' %>" lang="pt">Português</a>
+      <a href="/changelanguage/it?redirect=<%= encodeURIComponent(originalUrl || '/') %>" role="menuitem" class="<%= currentLang === 'it' ? 'active' : '' %>" lang="it">Italiano</a>
+      <a href="/changelanguage/en?redirect=<%= encodeURIComponent(originalUrl || '/') %>" role="menuitem" class="<%= currentLang === 'en' ? 'active' : '' %>" lang="en">English</a>
+      <a href="/changelanguage/fr?redirect=<%= encodeURIComponent(originalUrl || '/') %>" role="menuitem" class="<%= currentLang === 'fr' ? 'active' : '' %>" lang="fr">Français</a>
+      <a href="/changelanguage/es?redirect=<%= encodeURIComponent(originalUrl || '/') %>" role="menuitem" class="<%= currentLang === 'es' ? 'active' : '' %>" lang="es">Español</a>
+      <a href="/changelanguage/de?redirect=<%= encodeURIComponent(originalUrl || '/') %>" role="menuitem" class="<%= currentLang === 'de' ? 'active' : '' %>" lang="de">Deutsch</a>
+      <a href="/changelanguage/pt?redirect=<%= encodeURIComponent(originalUrl || '/') %>" role="menuitem" class="<%= currentLang === 'pt' ? 'active' : '' %>" lang="pt">Português</a>
     </div>
   </div>
 
@@ -48,11 +48,11 @@
     </div>
     
     <div class="page-body">
-      <%- content %>
+      <%- pageContent %>
     </div>
     
     <div class="page-navigation">
-      <a href="/" class="btn btn-secondary"><%= t('back_to_home') || 'Back to Home' %></a>
+      <a href="/" class="btn btn-secondary"><%= t('back_to_home') %></a>
     </div>
   </main>
 
