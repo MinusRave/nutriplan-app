@@ -49,9 +49,11 @@
     const savedState = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
     if (savedState) {
       const parsedState = JSON.parse(savedState);
-      // Utilizziamo solo alcuni dati dal localStorage come fallback
+      // Utilizziamo i dati dal localStorage come fallback
       if (parsedState && parsedState.exists) {
         console.log('Stato della conversazione recuperato da localStorage');
+        // Applichiamo direttamente lo stato dal localStorage
+        conversationState = parsedState;
       }
     }
   } catch (e) {
@@ -169,6 +171,49 @@
    */
   async function checkExistingConversation() {
     try {
+      // Prima verifichiamo se abbiamo dati nel localStorage
+      if (conversationState.exists && conversationState.messages.length > 0) {
+        console.log('Usando la conversazione dal localStorage');
+        
+        // Reset UI per assicurarci di non duplicare messaggi
+        if (elements.chatMessages) {
+          elements.chatMessages.innerHTML = '';
+        }
+        
+        // Visualizza i messaggi dal localStorage
+        conversationState.messages.forEach(msg => {
+          if (msg.role === 'user') {
+            addUserMessage(msg.content);
+          } else if (msg.role === 'assistant') {
+            addAssistantMessage(msg.content);
+          }
+        });
+        
+        // Se la conversazione è terminata, mostra il pulsante di conferma
+        if (!conversationState.isActive && conversationState.collectedData) {
+          addConfirmationButton();
+        }
+        
+        // Scorrimento automatico in fondo
+        scrollToBottom();
+        
+        // Verifichiamo anche sul server, ma non blocchiamo l'UI
+        fetchServerState();
+        
+        return true;
+      }
+      
+      // Altrimenti proviamo a recuperare dati dal server
+      return await fetchServerState();
+    } catch (error) {
+      console.error('Errore nel controllo della conversazione:', error);
+      return conversationState.exists || false;
+    }
+  }
+  
+  // Funzione separata per recuperare lo stato dal server
+  async function fetchServerState() {
+    try {
       if (!elements.csrfToken || !elements.csrfToken.value) {
         console.error("CSRF token mancante");
         return false;
@@ -188,11 +233,18 @@
       
       const data = await response.json();
       
-      // Aggiorna lo stato della conversazione
-      conversationState = data;
-      
-      // Se esiste una conversazione, carica i messaggi
-      if (data.exists) {
+      // Se sul server la conversazione esiste ed è più aggiornata del localStorage
+      if (data.exists && 
+         (!conversationState.exists || data.messages.length > conversationState.messages.length)) {
+        
+        // Aggiorna lo stato della conversazione
+        conversationState = data;
+        
+        // Reset UI per assicurarci di non duplicare messaggi
+        if (elements.chatMessages) {
+          elements.chatMessages.innerHTML = '';
+        }
+        
         // Visualizza i messaggi
         data.messages.forEach(msg => {
           if (msg.role === 'user') {
@@ -209,12 +261,19 @@
         
         // Scorrimento automatico in fondo
         scrollToBottom();
+        
+        // Salva nel localStorage
+        try {
+          localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify(conversationState));
+        } catch (e) {
+          console.warn('Impossibile salvare lo stato in localStorage:', e);
+        }
       }
       
       return data.exists;
     } catch (error) {
-      console.error('Errore nel controllo della conversazione:', error);
-      return false;
+      console.error('Errore nel controllo della conversazione dal server:', error);
+      return conversationState.exists || false;
     }
   }
 

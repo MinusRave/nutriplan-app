@@ -61,12 +61,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Configurazione sessione
 app.use(session({
   secret: process.env.SESSION_SECRET || 'nutriplan_secret_key',
-  resave: false,
+  resave: true, // Cambiato da false a true per garantire sessioni persistenti
   saveUninitialized: true,
   cookie: { 
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true, // Protegge contro attacchi XSS
-    maxAge: 1000 * 60 * 60 * 24, // 24 ore invece di 60 minuti
+    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 giorni (esteso da 24 ore)
     sameSite: 'lax' // Migliore compatibilità su mobile
   }
 }));
@@ -75,8 +75,9 @@ app.use(session({
 const csrfProtection = csurf({ 
   cookie: { 
     httpOnly: true, 
-    sameSite: 'lax', // Cambiato da 'strict' a 'lax' per compatibilità mobile
-    secure: process.env.NODE_ENV === 'production'
+    sameSite: 'lax', // Compatibilità mobile
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 1000 * 60 * 60 * 24 * 7 // 7 giorni (stessa durata della sessione)
   } 
 });
 
