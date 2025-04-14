@@ -1,0 +1,63 @@
+{
+  "app": {
+    "title": "DietingWithJoe",
+    "subtitle": "Il tuo piano alimentare personalizzato",
+    "description": "Ottieni un piano alimentare personalizzato basato sulle tue esigenze, preferenze e obiettivi di salute con Joe, il tuo assistente nutrizionale."
+  },
+  "progress": {
+    "title": "Progresso della conversazione",
+    "start": "Inizio",
+    "personal": "Nome e Dati",
+    "goals": "Obiettivi",
+    "health": "Condizioni",
+    "preferences": "Preferenze",
+    "habits": "Abitudini",
+    "contact": "Contatto",
+    "review": "Riepilogo"
+  },
+  "chat": {
+    "conversation": "Conversazione con l'assistente nutrizionale",
+    "messageForm": "Modulo per inviare un messaggio",
+    "placeholder": "Scrivi un messaggio...",
+    "ariaLabel": "Messaggio da inviare all'assistente",
+    "send": "Invia messaggio",
+    "typing": "L'assistente sta scrivendo..."
+  },
+  "cookies": {
+    "title": "Utilizzo dei cookie",
+    "message": "Utilizziamo i cookie per migliorare la tua esperienza, personalizzare i contenuti e analizzare il traffico. Puoi accettare o rifiutare i cookie non essenziali.",
+    "accept": "Accetta tutti",
+    "reject": "Solo essenziali"
+  },
+  "language": {
+    "selector": "Selettore lingua",
+    "change": "Cambia lingua"
+  },
+  "error": {
+    "generic": "Si è verificato un errore. Riprova più tardi.",
+    "connection": "Errore di connessione con l'assistente.",
+    "timeout": "L'operazione ha impiegato troppo tempo.",
+    "validation": "Alcuni dati non sono validi, controlla e riprova.",
+    "invalidMessage": "Messaggio non valido"
+  },
+  "messages": {
+    "timeout": "Sembra che la conversazione sia inattiva. Sei ancora lì?",
+    "retry": "Sto provando a riconnettermi...",
+    "confirmation": "Conferma e Invia"
+  },
+  "thankyou": {
+    "title": "Grazie!",
+    "message": "Abbiamo ricevuto i tuoi dati e ti invieremo presto il tuo piano alimentare personalizzato all'indirizzo email che ci hai fornito.",
+    "newConversation": "Nuova conversazione"
+  },
+  "submission": {
+    "success": "Dati inviati con successo! Riceverai presto il tuo piano alimentare personalizzato.",
+    "error": "Si è verificato un errore nell'invio dei dati. Riprova più tardi."
+  },
+  "footer": {
+    "copyright": "DietingWithJoe | Tutti i diritti riservati",
+    "privacy": "Privacy",
+    "terms": "Termini",
+    "contact": "Contatti"
+  }
+}

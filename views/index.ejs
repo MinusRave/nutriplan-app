@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="<%= currentLang %>">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>DietingWithJoe - <%= t('app.subtitle') %></title>
+  <meta name="description" content="<%= t('app.description') %>">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/images/favicon/favicon.svg">
+  <link rel="manifest" href="/images/favicon/site.webmanifest">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- App CSS -->
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <!-- Google Analytics -->
+  <% if (process.env.GA_TRACKING_ID) { %>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=<%= process.env.GA_TRACKING_ID %>"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', '<%= process.env.GA_TRACKING_ID %>', {
+      'user_id': '<%= clientInfo.sessionId %>'
+    });
+  </script>
+  <% } %>
+  
+  <!-- Meta Pixel -->
+  <% if (process.env.META_PIXEL_ID) { %>
+  <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    // Inizializzazione commentata per evitare errori con ID non valido
+    // fbq('init', '<%= process.env.META_PIXEL_ID %>');
+    // fbq('track', 'PageView');
+  </script>
+  <% } %>
+  
+  <!-- Variabili globali -->
+  <script>
+    window.clientInfo = <%- JSON.stringify(clientInfo) %>;
+    window.currentLanguage = "<%= currentLang %>";
+    window.appTranslations = {
+      error: {
+        generic: "<%= t('error.generic') %>",
+        connection: "<%= t('error.connection') %>",
+        timeout: "<%= t('error.timeout') %>", 
+        validation: "<%= t('error.validation') %>"
+      },
+      messages: {
+        timeout: "<%= t('messages.timeout') %>",
+        retry: "<%= t('messages.retry') %>",
+        confirmation: "<%= t('messages.confirmation') %>"
+      }
+    };
+  </script>
+</head>
+<body>
+  <!-- Cookie Consent Banner -->
+  <div id="cookie-consent" class="cookie-banner hidden" aria-live="polite">
+    <div class="cookie-content">
+      <h3><%= t('cookies.title') %></h3>
+      <p><%= t('cookies.message') %></p>
+      <div class="cookie-buttons">
+        <button id="accept-cookies" class="btn btn-primary"><%= t('cookies.accept') %></button>
+        <button id="reject-cookies" class="btn btn-secondary"><%= t('cookies.reject') %></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Language Selector -->
+  <div class="language-selector" role="navigation" aria-label="<%= t('language.selector') %>">
+    <button class="language-toggle" aria-haspopup="true" aria-expanded="false">
+      <span class="current-lang"><%= currentLang.toUpperCase() %></span>
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="language-icon"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path><line x1="2" y1="12" x2="22" y2="12"></line></svg>
+    </button>
+    <div class="language-dropdown hidden" role="menu">
+      <a href="/changelanguage/it" role="menuitem" class="<%= currentLang === 'it' ? 'active' : '' %>" lang="it">Italiano</a>
+      <a href="/changelanguage/en" role="menuitem" class="<%= currentLang === 'en' ? 'active' : '' %>" lang="en">English</a>
+      <a href="/changelanguage/fr" role="menuitem" class="<%= currentLang === 'fr' ? 'active' : '' %>" lang="fr">Français</a>
+      <a href="/changelanguage/es" role="menuitem" class="<%= currentLang === 'es' ? 'active' : '' %>" lang="es">Español</a>
+      <a href="/changelanguage/de" role="menuitem" class="<%= currentLang === 'de' ? 'active' : '' %>" lang="de">Deutsch</a>
+      <a href="/changelanguage/pt" role="menuitem" class="<%= currentLang === 'pt' ? 'active' : '' %>" lang="pt">Português</a>
+    </div>
+  </div>
+
+  <header>
+    <div class="container">
+      <div class="app-title">JOE</div>
+      <p class="subtitle"><%= t('app.subtitle') %></p>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Chat Interface -->
+    <div id="chat-container" aria-live="polite" aria-relevant="additions">
+      <div id="chat-messages" tabindex="0" role="log" aria-label="<%= t('chat.conversation') %>">
+        <!-- I messaggi verranno aggiunti dinamicamente qui -->
+      </div>
+      
+      <div id="chat-input-container">
+        <form id="chat-form" aria-label="<%= t('chat.messageForm') %>">
+          <div class="input-wrapper">
+            <input type="text" id="chat-input" 
+                  placeholder="<%= t('chat.placeholder') %>" 
+                  aria-label="<%= t('chat.ariaLabel') %>"
+                  autocomplete="off">
+            <button type="submit" id="send-button" class="btn btn-primary" aria-label="<%= t('chat.send') %>">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="send-icon"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+          </div>
+        </form>
+      </div>
+      
+      <div id="typing-indicator" class="hidden" aria-live="polite">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <span class="sr-only"><%= t('chat.typing') %></span>
+      </div>
+    </div>
+
+    <!-- Thank You Screen (hidden initially) -->
+    <div id="thank-you-screen" class="hidden" aria-live="polite">
+      <div class="thank-you-content">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="success-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        <h2><%= t('thankyou.title') %></h2>
+        <p><%= t('thankyou.message') %></p>
+        <button id="new-conversation" class="btn btn-primary"><%= t('thankyou.newConversation') %></button>
+      </div>
+    </div>
+
+    <!-- Info Cards (opzionali) -->
+    <div class="info-section">
+      <div class="info-card">
+        <h3>Deficiency symptoms</h3>
+        <p>Fatigue, weak immunity, and muscle cramps can be signs of missing key nutrients.</p>
+        <a href="#" class="cta">Signs of deficiency <span class="pointer">👆</span></a>
+        <span class="instagram-handle">@dietingwithjoe</span>
+      </div>
+
+      <div class="info-card">
+        <h3>Learn how to balance your diet</h3>
+        <p>Discover how to create a perfectly balanced nutrition plan that works for your lifestyle and goals.</p>
+        <a href="#" class="cta">Check out the full story <span class="pointer">👆</span></a>
+        <span class="instagram-handle">@dietingwithjoe</span>
+      </div>
+    </div>
+
+    <!-- Debug Panel (hidden in production) -->
+    <% if (process.env.NODE_ENV === 'development') { %>
+    <div id="debug-panel">
+      <h3>Debug Panel</h3>
+      <div class="debug-toggle">
+        <input type="checkbox" id="debug-toggle">
+        <label for="debug-toggle">Enable Debug Mode</label>
+      </div>
+      <div id="debug-content" class="hidden">
+        <div class="debug-section">
+          <h4>Client Info</h4>
+          <pre id="client-info"><%= JSON.stringify(clientInfo, null, 2) %></pre>
+        </div>
+        <div class="debug-section">
+          <h4>Conversation Log</h4>
+          <pre id="conversation-log"></pre>
+        </div>
+      </div>
+    </div>
+    <% } %>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; <%= new Date().getFullYear() %> <%= t('footer.copyright') %></p>
+      <div class="footer-links">
+        <a href="#privacy-policy"><%= t('footer.privacy') %></a>
+        <a href="#terms"><%= t('footer.terms') %></a>
+        <a href="#contact"><%= t('footer.contact') %></a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- CSRF Token -->
+  <input type="hidden" id="csrf-token" value="<%= csrfToken %>">
+  
+  <!-- Scripts -->
+  <script src="/js/main.js"></script>
+</body>
+</html>

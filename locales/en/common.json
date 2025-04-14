@@ -1,0 +1,63 @@
+{
+  "app": {
+    "title": "DietingWithJoe",
+    "subtitle": "Your personalized meal plan",
+    "description": "Get a personalized meal plan based on your needs, preferences, and health goals with Joe, your nutrition assistant."
+  },
+  "progress": {
+    "title": "Conversation progress",
+    "start": "Start",
+    "personal": "Name & Data",
+    "goals": "Goals",
+    "health": "Conditions",
+    "preferences": "Preferences",
+    "habits": "Habits",
+    "contact": "Contact",
+    "review": "Summary"
+  },
+  "chat": {
+    "conversation": "Conversation with nutritional assistant",
+    "messageForm": "Form to send a message",
+    "placeholder": "Type a message...",
+    "ariaLabel": "Message to send to assistant",
+    "send": "Send message",
+    "typing": "The assistant is typing..."
+  },
+  "cookies": {
+    "title": "Cookie Usage",
+    "message": "We use cookies to improve your experience, personalize content, and analyze traffic. You can accept or reject non-essential cookies.",
+    "accept": "Accept all",
+    "reject": "Essential only"
+  },
+  "language": {
+    "selector": "Language selector",
+    "change": "Change language"
+  },
+  "error": {
+    "generic": "An error occurred. Please try again later.",
+    "connection": "Error connecting with the assistant.",
+    "timeout": "The operation took too long.",
+    "validation": "Some data is invalid, please check and try again.",
+    "invalidMessage": "Invalid message"
+  },
+  "messages": {
+    "timeout": "It seems the conversation is inactive. Are you still there?",
+    "retry": "I'm trying to reconnect...",
+    "confirmation": "Confirm and Submit"
+  },
+  "thankyou": {
+    "title": "Thank you!",
+    "message": "We have received your data and will soon send your personalized meal plan to the email address you provided.",
+    "newConversation": "New conversation"
+  },
+  "submission": {
+    "success": "Data successfully submitted! You'll soon receive your personalized meal plan.",
+    "error": "An error occurred while submitting your data. Please try again later."
+  },
+  "footer": {
+    "copyright": "DietingWithJoe | All rights reserved",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "contact": "Contact"
+  }
+}

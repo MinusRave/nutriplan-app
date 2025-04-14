@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>NutriPlan - UI Guide</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- App CSS -->
+  <link rel="stylesheet" href="style.css">
+  
+  <style>
+    .guide-section {
+      margin-bottom: 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .color-sample {
+      display: inline-block;
+      width: 150px;
+      height: 80px;
+      margin: 5px;
+      border-radius: var(--border-radius-md);
+      position: relative;
+      box-shadow: var(--shadow-sm);
+    }
+    
+    .color-sample::after {
+      content: attr(data-color);
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background-color: rgba(255, 255, 255, 0.9);
+      padding: 4px 8px;
+      border-radius: var(--border-radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    
+    .colors-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      margin-top: 1rem;
+    }
+    
+    .chat-mockup {
+      max-width: 500px;
+      margin: 0 auto;
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius-lg);
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>NutriPlan UI Guide</h1>
+      <p class="subtitle">Guida di stile e componenti dell'interfaccia</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="guide-section">
+      <h2>Colori</h2>
+      <p>Palette dei colori principali utilizzati nell'applicazione:</p>
+      
+      <div class="colors-grid">
+        <div class="color-sample" style="background-color: var(--primary-color);" data-color="--primary-color"></div>
+        <div class="color-sample" style="background-color: var(--primary-light);" data-color="--primary-light"></div>
+        <div class="color-sample" style="background-color: var(--primary-dark);" data-color="--primary-dark"></div>
+        <div class="color-sample" style="background-color: var(--secondary-color);" data-color="--secondary-color"></div>
+        <div class="color-sample" style="background-color: var(--secondary-light);" data-color="--secondary-light"></div>
+        <div class="color-sample" style="background-color: var(--secondary-dark);" data-color="--secondary-dark"></div>
+        <div class="color-sample" style="background-color: var(--accent-color);" data-color="--accent-color"></div>
+        <div class="color-sample" style="background-color: var(--bg-color);" data-color="--bg-color"></div>
+        <div class="color-sample" style="background-color: var(--bg-light);" data-color="--bg-light"></div>
+      </div>
+    </div>
+    
+    <div class="guide-section">
+      <h2>Tipografia</h2>
+      <h1>Heading 1</h1>
+      <h2>Heading 2</h2>
+      <h3>Heading 3</h3>
+      <p>Paragrafo regolare. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla facilisi. Quisque facilisis, nisi nec aliquam placerat, nunc est ultricies nunc, euismod placerat nunc nisl vel nisl.</p>
+      <p><a href="#">Link di esempio</a></p>
+    </div>
+    
+    <div class="guide-section">
+      <h2>Bottoni</h2>
+      <button class="btn btn-primary">Bottone primario</button>
+      <button class="btn btn-secondary">Bottone secondario</button>
+    </div>
+    
+    <div class="guide-section">
+      <h2>Interfaccia Chat</h2>
+      
+      <div id="chat-container">
+        <div id="chat-messages">
+          <div class="message message-assistant">
+            <div class="message-avatar">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="avatar-icon">
+                <path d="M13.73 21a11 11 0 0 1-11-11V3.27a1 1 0 0 1 .607-.92 1 1 0 0 1 1.087.16L17.22 13.9a1 1 0 0 1 .236 1.042 1 1 0 0 1-.798.666l-2.91.72"></path>
+                <path d="M7.05 11.293a2.5 2.5 0 0 1-2.54-4.178L13.2 1.644a2.5 2.5 0 0 1 3.085-.326 2.5 2.5 0 0 1 .334 4.179L8.26 10.982"></path>
+              </svg>
+            </div>
+            <div class="message-content">
+              <span class="sr-only">Assistente: </span>
+              <div class="message-text">Ciao! Sono Joe, il tuo assistente nutrizionale. Ti aiuterò a creare un piano alimentare personalizzato. Per iniziare, potresti dirmi alcune informazioni di base come età, genere, altezza, peso e livello di attività fisica?</div>
+            </div>
+          </div>
+          
+          <div class="message message-user">
+            <div class="message-avatar">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="avatar-icon">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </div>
+            <div class="message-content">
+              <span class="sr-only">Tu: </span>
+              <div class="message-text">Ho 34 anni, sono un uomo, sono alto 175 cm e peso 80 kg. Faccio palestra 3 volte a settimana.</div>
+            </div>
+          </div>
+          
+          <div class="message message-assistant">
+            <div class="message-avatar">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="avatar-icon">
+                <path d="M13.73 21a11 11 0 0 1-11-11V3.27a1 1 0 0 1 .607-.92 1 1 0 0 1 1.087.16L17.22 13.9a1 1 0 0 1 .236 1.042 1 1 0 0 1-.798.666l-2.91.72"></path>
+                <path d="M7.05 11.293a2.5 2.5 0 0 1-2.54-4.178L13.2 1.644a2.5 2.5 0 0 1 3.085-.326 2.5 2.5 0 0 1 .334 4.179L8.26 10.982"></path>
+              </svg>
+            </div>
+            <div class="message-content">
+              <span class="sr-only">Assistente: </span>
+              <div class="message-text">Grazie per le informazioni! Basandomi sui dati che mi hai fornito, posso considerarti moderatamente attivo. Quali sono i tuoi obiettivi principali? Vuoi perdere peso, mantenere il peso attuale o aumentare la massa muscolare?</div>
+            </div>
+          </div>
+        </div>
+        
+        <div id="chat-input-container">
+          <form id="chat-form">
+            <div class="input-wrapper">
+              <input type="text" id="chat-input" placeholder="Scrivi un messaggio..." autocomplete="off">
+              <button type="submit" id="send-button" class="btn btn-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="send-icon"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    
+    <div class="guide-section">
+      <h2>Progress Bar</h2>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div class="progress" style="width: 37.5%"></div>
+        </div>
+        <div class="progress-steps">
+          <div class="step completed">Inizio</div>
+          <div class="step completed">Dati personali</div>
+          <div class="step active">Obiettivi</div>
+          <div class="step">Condizioni</div>
+          <div class="step">Preferenze</div>
+          <div class="step">Abitudini</div>
+          <div class="step">Contatto</div>
+          <div class="step">Riepilogo</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 NutriPlan. Tutti i diritti riservati.</p>
+      <div class="footer-links">
+        <a href="#">Privacy</a>
+        <a href="#">Termini</a>
+        <a href="#">Contatti</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
