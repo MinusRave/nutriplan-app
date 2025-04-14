@@ -516,22 +516,22 @@ app.post('/api/conversation/start', apiLimiter, csrfProtection, (req, res) => {
     
     switch(language) {
       case 'en':
-        welcomeMessage = "Hi! I'm Joe, your nutrition assistant. I'll help you create a personalized meal plan. To get started, could you tell me some basic information like your age, gender, height, weight, and physical activity level?";
+        welcomeMessage = "Hi! I'm Joe, your nutrition assistant. I'll help you create a personalized meal plan. What's your name?";
         break;
       case 'fr':
-        welcomeMessage = "Bonjour ! Je suis Joe, votre assistant nutritionnel. Je vais vous aider à créer un plan alimentaire personnalisé. Pour commencer, pourriez-vous me donner quelques informations de base comme votre âge, genre, taille, poids et niveau d'activité physique ?";
+        welcomeMessage = "Bonjour ! Je suis Joe, votre assistant nutritionnel. Je vais vous aider à créer un plan alimentaire personnalisé. Comment vous appelez-vous ?";
         break;
       case 'es':
-        welcomeMessage = "¡Hola! Soy Joe, tu asistente nutricional. Te ayudaré a crear un plan de alimentación personalizado. Para empezar, ¿podrías proporcionarme información básica como tu edad, género, altura, peso y nivel de actividad física?";
+        welcomeMessage = "¡Hola! Soy Joe, tu asistente nutricional. Te ayudaré a crear un plan de alimentación personalizado. ¿Cómo te llamas?";
         break;
       case 'de':
-        welcomeMessage = "Hallo! Ich bin Joe, Ihr Ernährungsassistent. Ich helfe Ihnen, einen persönlichen Ernährungsplan zu erstellen. Um zu beginnen, könnten Sie mir einige grundlegende Informationen wie Alter, Geschlecht, Größe, Gewicht und körperliches Aktivitätsniveau mitteilen?";
+        welcomeMessage = "Hallo! Ich bin Joe, Ihr Ernährungsassistent. Ich helfe Ihnen, einen persönlichen Ernährungsplan zu erstellen. Wie heißen Sie?";
         break;
       case 'pt':
-        welcomeMessage = "Olá! Sou o Joe, seu assistente nutricional. Vou ajudá-lo a criar um plano alimentar personalizado. Para começar, poderia me fornecer algumas informações básicas como idade, gênero, altura, peso e nível de atividade física?";
+        welcomeMessage = "Olá! Sou o Joe, seu assistente nutricional. Vou ajudá-lo a criar um plano alimentar personalizado. Qual é o seu nome?";
         break;
       default:
-        welcomeMessage = "Ciao! Sono Joe, il tuo assistente nutrizionale. Ti aiuterò a creare un piano alimentare personalizzato. Per iniziare, potresti dirmi alcune informazioni di base come età, genere, altezza, peso e livello di attività fisica?";
+        welcomeMessage = "Ciao! Sono Joe, il tuo assistente nutrizionale. Ti aiuterò a creare un piano alimentare personalizzato. Come ti chiami?";
     }
     
     // Aggiungi il messaggio di benvenuto
