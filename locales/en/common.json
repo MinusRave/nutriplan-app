@@ -122,7 +122,9 @@
   "messages": {
     "timeout": "It seems the conversation is inactive. Are you still there?",
     "retry": "I'm trying to reconnect...",
-    "confirmation": "Confirm and Submit"
+    "confirmation": "Confirm and Submit",
+    "typing": "Joe is typing",
+    "cancel": "Cancel generation"
   },
   "thankyou": {
     "title": "Thank you!",

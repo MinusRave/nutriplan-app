@@ -330,8 +330,10 @@ class NutritionalConversation {
 
   /**
    * Aggiunge un messaggio alla conversazione
+   * @param {string} content - Il messaggio dell'utente
+   * @param {function} streamCallback - Callback opzionale per lo streaming della risposta
    */
-  async addMessage(content) {
+  async addMessage(content, streamCallback = null) {
     // Aggiorna timestamp ultima interazione
     this.lastInteraction = Date.now();
 
@@ -348,16 +350,64 @@ class NutritionalConversation {
     ];
 
     try {
-      // Chiamata a Claude
-      const response = await anthropic.messages.create({
-        model: 'claude-3-7-sonnet-20250219',
-        system: this.systemPrompt,
-        messages: messagesForClaude,
-        max_tokens: 1500,
-        temperature: 0.7
-      });
+      let responseContent = '';
+      let isStreaming = !!streamCallback;
 
-      const responseContent = response.content[0].text;
+      if (isStreaming) {
+        // Streaming call
+        const stream = await anthropic.messages.stream({
+          model: 'claude-3-7-sonnet-20250219',
+          system: this.systemPrompt,
+          messages: messagesForClaude,
+          max_tokens: 1500,
+          temperature: 0.7
+        });
+
+        // Initialize a buffer to collect the chunks
+        let fullContent = '';
+        
+        // Process each chunk as it arrives
+        for await (const chunk of stream) {
+          if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+            const chunkText = chunk.delta.text;
+            fullContent += chunkText;
+            
+            // Send each chunk to the client in real-time
+            if (streamCallback) {
+              streamCallback({
+                chunk: chunkText,
+                fullContent,
+                isComplete: false,
+                conversationStep: this.conversationStep
+              });
+            }
+          }
+        }
+        
+        // Get the full response
+        responseContent = fullContent;
+        
+        // Final update with complete flag
+        if (streamCallback) {
+          streamCallback({
+            chunk: '',
+            fullContent: responseContent,
+            isComplete: true,
+            conversationStep: this.conversationStep
+          });
+        }
+      } else {
+        // Non-streaming call (fallback)
+        const response = await anthropic.messages.create({
+          model: 'claude-3-7-sonnet-20250219',
+          system: this.systemPrompt,
+          messages: messagesForClaude,
+          max_tokens: 1500,
+          temperature: 0.7
+        });
+
+        responseContent = response.content[0].text;
+      }
 
       // Aggiungi la risposta alla cronologia
       this.messages.push({
@@ -632,7 +682,7 @@ app.post('/api/conversation/start', apiLimiter, csrfProtection, (req, res) => {
 // API: Invia un messaggio alla conversazione
 app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, stream } = req.body;
     const conversationId = req.session.id;
     
     if (!message) {
@@ -646,21 +696,80 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
       conversations.set(conversationId, conversation);
     }
     
-    // Aggiungi il messaggio e ottieni risposta
-    const response = await conversation.addMessage(message);
+    // Determina se usare streaming in base al parametro nella richiesta
+    const useStreaming = stream === true;
     
-    // Estrai solo il contenuto visibile all'utente (senza il tag DATI_COMPLETI)
-    let visibleContent = response.content;
-    if (!response.isActive) {
-      visibleContent = visibleContent.replace(/<DATI_COMPLETI>[\s\S]*?<\/DATI_COMPLETI>/g, '').trim();
+    if (useStreaming) {
+      // Set headers for SSE
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      });
+      
+      // Streaming callback function
+      const sendStreamChunk = (data) => {
+        const { chunk, fullContent, isComplete, conversationStep } = data;
+        
+        // Prepare visible content (remove DATI_COMPLETI tag if present)
+        let visibleContent = fullContent;
+        let collectedData = null;
+        let isActive = true;
+        
+        if (visibleContent.includes('<DATI_COMPLETI>')) {
+          visibleContent = visibleContent.replace(/<DATI_COMPLETI>[\s\S]*?<\/DATI_COMPLETI>/g, '').trim();
+          isActive = false;
+          
+          // Extract collected data if this is the final chunk
+          if (isComplete) {
+            try {
+              const regex = /<DATI_COMPLETI>([\s\S]*?)<\/DATI_COMPLETI>/;
+              const match = fullContent.match(regex);
+              
+              if (match && match[1]) {
+                collectedData = JSON.parse(match[1].trim());
+              }
+            } catch (error) {
+              console.error('Errore nell\'estrazione dei dati:', error);
+            }
+          }
+        }
+        
+        // Send the chunk as an event
+        res.write(`data: ${JSON.stringify({
+          chunk,
+          message: visibleContent,
+          isComplete,
+          conversationStep,
+          isActive,
+          ...(collectedData && { collectedData })
+        })}\n\n`);
+        
+        // If complete, end the response
+        if (isComplete) {
+          res.end();
+        }
+      };
+      
+      // Start the streaming conversation
+      await conversation.addMessage(message, sendStreamChunk);
+    } else {
+      // Non-streaming response (traditional API)
+      const response = await conversation.addMessage(message);
+      
+      // Estrai solo il contenuto visibile all'utente (senza il tag DATI_COMPLETI)
+      let visibleContent = response.content;
+      if (!response.isActive) {
+        visibleContent = visibleContent.replace(/<DATI_COMPLETI>[\s\S]*?<\/DATI_COMPLETI>/g, '').trim();
+      }
+      
+      res.json({
+        message: visibleContent,
+        conversationStep: response.conversationStep,
+        isActive: response.isActive,
+        ...(response.collectedData && { collectedData: response.collectedData })
+      });
     }
-    
-    res.json({
-      message: visibleContent,
-      conversationStep: response.conversationStep,
-      isActive: response.isActive,
-      ...(response.collectedData && { collectedData: response.collectedData })
-    });
   } catch (error) {
     console.error('Errore nella comunicazione con Claude:', error);
     res.status(500).json({ 

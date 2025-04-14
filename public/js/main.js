@@ -417,17 +417,224 @@
     // Aggiornamento dei dati della conversazione
     conversationState.messages.push({ role: 'user', content: userInput });
     
-    // Mostra l'indicatore di digitazione
-    showTypingIndicator();
-    
     // Flag per evitare invii multipli
     isSubmitting = true;
+    
+    // Disabilita input e pulsante durante la comunicazione
+    if (elements.chatInput) {
+      elements.chatInput.disabled = true;
+      elements.chatInput.classList.add('disabled');
+    }
+    
+    if (elements.sendButton) {
+      elements.sendButton.disabled = true;
+      elements.sendButton.classList.add('disabled');
+    }
+    
+    // Mostra l'indicatore di digitazione avanzato
+    showTypingIndicator(true); // true = modalità avanzata
     
     try {
       if (!elements.csrfToken || !elements.csrfToken.value) {
         throw new Error("CSRF token mancante");
       }
+
+      // Crea assistant message placeholder per lo streaming
+      const assistantMessageElement = createMessageElement('assistant', '');
+      if (elements.chatMessages) {
+        elements.chatMessages.appendChild(assistantMessageElement);
+      }
       
+      const messageTextElement = assistantMessageElement.querySelector('.message-text');
+      
+      // Determina se usare streaming in base alla feature detection
+      const supportsSSE = 'EventSource' in window;
+      
+      if (supportsSSE) {
+        // STREAMING APPROACH
+        // Imposta un timeout per il fallback
+        const streamTimeoutId = setTimeout(() => {
+          console.warn('Stream timeout, falling back to traditional request');
+          handleTraditionalRequest(userInput);
+        }, APP_CONFIG.RESPONSE_TIMEOUT);
+        
+        try {
+          // Crea un EventSource per lo streaming (SSE)
+          const eventUrl = `/api/conversation/message`;
+          
+          // Prepara il payload in formato URL-encoded
+          const formData = new URLSearchParams();
+          formData.append('message', userInput);
+          formData.append('stream', 'true');
+          formData.append('_csrf', elements.csrfToken.value);
+          
+          // Usa fetch per iniziare lo streaming
+          const response = await fetch(eventUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRF-Token': elements.csrfToken.value
+            },
+            body: JSON.stringify({ message: userInput, stream: true })
+          });
+          
+          if (!response.ok) {
+            throw new Error('Errore nella comunicazione con il server');
+          }
+          
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let fullMessage = '';
+          let conversationStep = conversationState.conversationStep;
+          let isActive = true;
+          let collectedData = null;
+          
+          // Funzione per processare i chunk
+          async function readChunks() {
+            try {
+              while (true) {
+                const { value, done } = await reader.read();
+                
+                if (done) {
+                  break;
+                }
+                
+                // Decode the chunk and add to buffer
+                buffer += decoder.decode(value, { stream: true });
+                
+                // Process complete SSE messages
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop() || ''; // Keep the last incomplete chunk in buffer
+                
+                for (const line of lines) {
+                  if (!line.trim() || !line.startsWith('data: ')) continue;
+                  
+                  try {
+                    const jsonStr = line.replace(/^data: /, '');
+                    const eventData = JSON.parse(jsonStr);
+                    
+                    if (eventData.chunk) {
+                      fullMessage += eventData.chunk;
+                      if (messageTextElement) {
+                        messageTextElement.innerHTML = formatMessage(fullMessage);
+                        scrollToBottom();
+                      }
+                    }
+                    
+                    if (eventData.isComplete) {
+                      // Final update
+                      conversationStep = eventData.conversationStep || conversationStep;
+                      isActive = eventData.isActive;
+                      if (eventData.collectedData) {
+                        collectedData = eventData.collectedData;
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Error parsing SSE data:', err);
+                  }
+                }
+              }
+              
+              clearTimeout(streamTimeoutId);
+              
+              // Finalize the conversation
+              conversationState.messages.push({ role: 'assistant', content: fullMessage });
+              conversationState.conversationStep = conversationStep;
+              conversationState.isActive = isActive;
+              
+              if (collectedData) {
+                conversationState.collectedData = collectedData;
+                
+                // Se la conversazione è terminata, mostra il pulsante di conferma
+                if (!isActive) {
+                  addConfirmationButton();
+                }
+              }
+              
+              // Aggiornamento debug panel
+              updateDebugPanel();
+              
+              // Reset del contatore di tentativi
+              retryCount = 0;
+              
+              // Traccia evento
+              trackEvent('message_sent');
+            } catch (err) {
+              console.error('Error reading stream:', err);
+              handleCommunicationError();
+            } finally {
+              // Cleanup
+              hideTypingIndicator();
+              isSubmitting = false;
+              
+              // Riabilita input e pulsante
+              if (elements.chatInput) {
+                elements.chatInput.disabled = false;
+                elements.chatInput.classList.remove('disabled');
+                elements.chatInput.focus();
+              }
+              
+              if (elements.sendButton) {
+                elements.sendButton.disabled = false;
+                elements.sendButton.classList.remove('disabled');
+              }
+              
+              scrollToBottom();
+            }
+          }
+          
+          // Start processing the stream
+          readChunks();
+          
+        } catch (streamError) {
+          console.error('Stream error, falling back to traditional request:', streamError);
+          clearTimeout(streamTimeoutId);
+          
+          // Elimina il messaggio placeholder creato per lo streaming
+          if (assistantMessageElement && elements.chatMessages) {
+            elements.chatMessages.removeChild(assistantMessageElement);
+          }
+          
+          // Fallback to traditional request
+          await handleTraditionalRequest(userInput);
+        }
+      } else {
+        // NON-STREAMING FALLBACK
+        // Elimina il messaggio placeholder creato per lo streaming
+        if (assistantMessageElement && elements.chatMessages) {
+          elements.chatMessages.removeChild(assistantMessageElement);
+        }
+        
+        await handleTraditionalRequest(userInput);
+      }
+    } catch (error) {
+      console.error('Errore nella comunicazione con il server:', error);
+      handleCommunicationError();
+      
+      // Riabilita input e pulsante
+      if (elements.chatInput) {
+        elements.chatInput.disabled = false;
+        elements.chatInput.classList.remove('disabled');
+      }
+      
+      if (elements.sendButton) {
+        elements.sendButton.disabled = false;
+        elements.sendButton.classList.remove('disabled');
+      }
+      
+      // Nascondi l'indicatore di digitazione
+      hideTypingIndicator();
+      isSubmitting = false;
+      scrollToBottom();
+    }
+  }
+  
+  /**
+   * Gestisce la richiesta tradizionale (non streaming)
+   */
+  async function handleTraditionalRequest(userInput) {
+    try {
       // Invia il messaggio al server
       const response = await fetch('/api/conversation/message', {
         method: 'POST',
@@ -476,6 +683,19 @@
       // Nascondi l'indicatore di digitazione
       hideTypingIndicator();
       isSubmitting = false;
+      
+      // Riabilita input e pulsante
+      if (elements.chatInput) {
+        elements.chatInput.disabled = false;
+        elements.chatInput.classList.remove('disabled');
+        elements.chatInput.focus();
+      }
+      
+      if (elements.sendButton) {
+        elements.sendButton.disabled = false;
+        elements.sendButton.classList.remove('disabled');
+      }
+      
       scrollToBottom();
     }
   }
@@ -589,10 +809,65 @@
 
   /**
    * Mostra l'indicatore di digitazione
+   * @param {boolean} advanced - Se true, mostra un indicatore più dettagliato
    */
-  function showTypingIndicator() {
-    if (elements.typingIndicator) {
-      elements.typingIndicator.classList.remove('hidden');
+  function showTypingIndicator(advanced = false) {
+    if (!elements.typingIndicator) return;
+    
+    elements.typingIndicator.classList.remove('hidden');
+    
+    if (advanced) {
+      // Aggiunge classe per stile avanzato
+      elements.typingIndicator.classList.add('advanced');
+      
+      // Aggiungi ulteriori elementi all'indicatore
+      if (!elements.typingIndicator.querySelector('.typing-status')) {
+        const statusElement = document.createElement('span');
+        statusElement.className = 'typing-status';
+        statusElement.textContent = translations.messages.typing || 'Digitando...';
+        elements.typingIndicator.appendChild(statusElement);
+        
+        // Aggiungi pulsante cancella se non c'è già
+        if (!elements.typingIndicator.querySelector('.cancel-button')) {
+          const cancelButton = document.createElement('button');
+          cancelButton.className = 'cancel-button';
+          cancelButton.setAttribute('aria-label', 'Annulla generazione');
+          cancelButton.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          `;
+          elements.typingIndicator.appendChild(cancelButton);
+          
+          // Implementa cancellazione (in una versione futura)
+          cancelButton.addEventListener('click', () => {
+            // Qui andrebbe la logica di cancellazione
+            hideTypingIndicator();
+          });
+        }
+      }
+      
+      // Avvia animazione pulsante
+      const dots = elements.typingIndicator.querySelectorAll('.typing-dot');
+      dots.forEach((dot, i) => {
+        dot.style.animationDuration = '1.4s';
+        dot.style.animationDelay = `${i * 0.2}s`;
+      });
+    } else {
+      // Stile base
+      elements.typingIndicator.classList.remove('advanced');
+      
+      // Rimuovi elementi aggiuntivi se presenti
+      const statusElement = elements.typingIndicator.querySelector('.typing-status');
+      if (statusElement) {
+        elements.typingIndicator.removeChild(statusElement);
+      }
+      
+      const cancelButton = elements.typingIndicator.querySelector('.cancel-button');
+      if (cancelButton) {
+        elements.typingIndicator.removeChild(cancelButton);
+      }
     }
   }
 
@@ -600,8 +875,20 @@
    * Nascondi l'indicatore di digitazione
    */
   function hideTypingIndicator() {
-    if (elements.typingIndicator) {
-      elements.typingIndicator.classList.add('hidden');
+    if (!elements.typingIndicator) return;
+    
+    elements.typingIndicator.classList.add('hidden');
+    elements.typingIndicator.classList.remove('advanced');
+    
+    // Rimuovi elementi aggiuntivi
+    const statusElement = elements.typingIndicator.querySelector('.typing-status');
+    if (statusElement) {
+      elements.typingIndicator.removeChild(statusElement);
+    }
+    
+    const cancelButton = elements.typingIndicator.querySelector('.cancel-button');
+    if (cancelButton) {
+      elements.typingIndicator.removeChild(cancelButton);
     }
   }
 

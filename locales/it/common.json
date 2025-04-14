@@ -122,7 +122,9 @@
   "messages": {
     "timeout": "Sembra che la conversazione sia inattiva. Sei ancora lì?",
     "retry": "Sto provando a riconnettermi...",
-    "confirmation": "Conferma e Invia"
+    "confirmation": "Conferma e Invia",
+    "typing": "Joe sta scrivendo",
+    "cancel": "Annulla generazione"
   },
   "thankyou": {
     "title": "Grazie!",
