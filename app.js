@@ -544,6 +544,7 @@ class NutritionalConversation {
       collectedData: this.collectedData,
       lastInteraction: this.lastInteraction,
       conversationStep: this.conversationStep,
+      isCompleted: this.collectedData !== null, // Una conversazione è completa solo se ha dati raccolti
       messages: this.messages.map(msg => {
         if (msg.role === 'assistant') {
           return {
@@ -831,8 +832,9 @@ app.get('/api/conversation/state', csrfProtection, (req, res) => {
   
   console.log(`Richiesta stato conversazione da ${isMobile ? 'mobile' : 'desktop'}, sessionId: ${conversationId.substring(0, 8)}...`);
   
-  if (!conversation) {
-    console.log(`Conversazione non trovata per la sessione ${conversationId.substring(0, 8)}...`);
+  // Non ripristiniamo conversazioni incomplete - solo complete con collectedData
+  if (!conversation || !conversation.getState().isCompleted) {
+    console.log(`Conversazione incompleta o non trovata per sessione ${conversationId.substring(0, 8)}. Iniziando nuova conversazione.`);
     return res.json({
       exists: false,
       isActive: true,
@@ -841,10 +843,11 @@ app.get('/api/conversation/state', csrfProtection, (req, res) => {
     });
   }
   
+  // Solo conversazioni complete con dati raccolti verranno ripristinate
   const state = conversation.getState();
   
   // Aggiungiamo informazioni di debug
-  console.log(`Stato conversazione: ${state.messages.length} messaggi, step ${state.conversationStep}, isActive: ${state.isActive}`);
+  console.log(`Ripristino conversazione completata: ${state.messages.length} messaggi, dati raccolti: ${!!state.collectedData}`);
   
   res.json({
     exists: true,

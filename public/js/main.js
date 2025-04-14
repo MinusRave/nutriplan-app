@@ -51,21 +51,8 @@
     collectedData: null
   };
   
-  // Recupera conversazione da localStorage (fallback per sessioni interrotte)
-  try {
-    const savedState = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
-    if (savedState) {
-      const parsedState = JSON.parse(savedState);
-      // Utilizziamo i dati dal localStorage come fallback
-      if (parsedState && parsedState.exists) {
-        console.log('Stato della conversazione recuperato da localStorage');
-        // Applichiamo direttamente lo stato dal localStorage
-        conversationState = parsedState;
-      }
-    }
-  } catch (e) {
-    console.warn('Errore nel recupero dello stato da localStorage:', e);
-  }
+  // Non ripristiniamo più conversazioni incomplete dal localStorage
+  // Solo le conversazioni completate verranno salvate per scopi analitici
 
   let inactivityTimer = null;
   let retryCount = 0;
@@ -178,43 +165,11 @@
    */
   async function checkExistingConversation() {
     try {
-      // Prima verifichiamo se abbiamo dati nel localStorage
-      if (conversationState.exists && conversationState.messages.length > 0) {
-        console.log('Usando la conversazione dal localStorage');
-        
-        // Reset UI per assicurarci di non duplicare messaggi
-        if (elements.chatMessages) {
-          elements.chatMessages.innerHTML = '';
-        }
-        
-        // Visualizza i messaggi dal localStorage
-        conversationState.messages.forEach(msg => {
-          if (msg.role === 'user') {
-            addUserMessage(msg.content);
-          } else if (msg.role === 'assistant') {
-            addAssistantMessage(msg.content);
-          }
-        });
-        
-        // Se la conversazione è terminata, mostra il pulsante di conferma
-        if (!conversationState.isActive && conversationState.collectedData) {
-          addConfirmationButton();
-        }
-        
-        // Scorrimento automatico in fondo
-        scrollToBottom();
-        
-        // Verifichiamo anche sul server, ma non blocchiamo l'UI
-        fetchServerState();
-        
-        return true;
-      }
-      
-      // Altrimenti proviamo a recuperare dati dal server
+      // Verifichiamo solo sul server - non usiamo più il localStorage per conversazioni incomplete
       return await fetchServerState();
     } catch (error) {
       console.error('Errore nel controllo della conversazione:', error);
-      return conversationState.exists || false;
+      return false;
     }
   }
   
@@ -269,12 +224,7 @@
         // Scorrimento automatico in fondo
         scrollToBottom();
         
-        // Salva nel localStorage
-        try {
-          localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify(conversationState));
-        } catch (e) {
-          console.warn('Impossibile salvare lo stato in localStorage:', e);
-        }
+        // Non salviamo più lo stato durante la conversazione
       }
       
       return data.exists;
@@ -497,12 +447,7 @@
     // Aggiornamento dei dati della conversazione
     conversationState.messages.push({ role: 'user', content: userInput });
     
-    // Salva lo stato in localStorage come backup
-    try {
-      localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify(conversationState));
-    } catch (e) {
-      console.warn('Impossibile salvare lo stato in localStorage:', e);
-    }
+    // Non salviamo più lo stato durante la conversazione
     
     // Flag per evitare invii multipli
     isSubmitting = true;
@@ -656,12 +601,7 @@
                 }
               }
               
-              // Salva lo stato aggiornato in localStorage
-              try {
-                localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify(conversationState));
-              } catch (e) {
-                console.warn('Impossibile salvare lo stato in localStorage:', e);
-              }
+              // Non salviamo più lo stato durante la conversazione
               
               // Aggiornamento debug panel
               updateDebugPanel();
@@ -779,12 +719,7 @@
         addConfirmationButton();
       }
       
-      // Salva lo stato in localStorage
-      try {
-        localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify(conversationState));
-      } catch (e) {
-        console.warn('Impossibile salvare lo stato in localStorage:', e);
-      }
+      // Non salviamo più lo stato durante la conversazione
       
       // Aggiornamento debug panel
       updateDebugPanel();
