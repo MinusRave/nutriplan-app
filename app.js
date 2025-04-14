@@ -66,12 +66,19 @@ app.use(session({
   cookie: { 
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true, // Protegge contro attacchi XSS
-    maxAge: 1000 * 60 * 60 // 60 minuti
+    maxAge: 1000 * 60 * 60 * 24, // 24 ore invece di 60 minuti
+    sameSite: 'lax' // Migliore compatibilità su mobile
   }
 }));
 
 // CSRF protection
-const csrfProtection = csurf({ cookie: { httpOnly: true, sameSite: 'strict' } });
+const csrfProtection = csurf({ 
+  cookie: { 
+    httpOnly: true, 
+    sameSite: 'lax', // Cambiato da 'strict' a 'lax' per compatibilità mobile
+    secure: process.env.NODE_ENV === 'production'
+  } 
+});
 
 // Configurazione del rilevamento della lingua e della localizzazione
 i18next
@@ -873,7 +880,7 @@ app.post('/api/submit', apiLimiter, csrfProtection, [
 // Pulizia delle conversazioni inattive
 setInterval(() => {
   const now = Date.now();
-  const INACTIVE_THRESHOLD = 24 * 60 * 60 * 1000; // 24 ore
+  const INACTIVE_THRESHOLD = 3 * 24 * 60 * 60 * 1000; // 3 giorni invece di 24 ore
   
   for (const [id, conversation] of conversations.entries()) {
     const inactiveTime = now - conversation.lastInteraction;

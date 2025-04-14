@@ -899,7 +899,7 @@ a.app-title:hover {
 /* ======== INFO CARDS ======== */
 .info-section {
   margin-top: var(--spacing-xl);
-  display: grid;
+  display: none; /* Hide info cards */
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: var(--spacing-lg);
 }

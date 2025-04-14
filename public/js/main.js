@@ -43,6 +43,20 @@
     messages: [],
     collectedData: null
   };
+  
+  // Recupera conversazione da localStorage (fallback per sessioni interrotte)
+  try {
+    const savedState = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
+    if (savedState) {
+      const parsedState = JSON.parse(savedState);
+      // Utilizziamo solo alcuni dati dal localStorage come fallback
+      if (parsedState && parsedState.exists) {
+        console.log('Stato della conversazione recuperato da localStorage');
+      }
+    }
+  } catch (e) {
+    console.warn('Errore nel recupero dello stato da localStorage:', e);
+  }
 
   let inactivityTimer = null;
   let retryCount = 0;
@@ -417,6 +431,13 @@
     // Aggiornamento dei dati della conversazione
     conversationState.messages.push({ role: 'user', content: userInput });
     
+    // Salva lo stato in localStorage come backup
+    try {
+      localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify(conversationState));
+    } catch (e) {
+      console.warn('Impossibile salvare lo stato in localStorage:', e);
+    }
+    
     // Flag per evitare invii multipli
     isSubmitting = true;
     
@@ -569,6 +590,13 @@
                 }
               }
               
+              // Salva lo stato aggiornato in localStorage
+              try {
+                localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify(conversationState));
+              } catch (e) {
+                console.warn('Impossibile salvare lo stato in localStorage:', e);
+              }
+              
               // Aggiornamento debug panel
               updateDebugPanel();
               
@@ -683,6 +711,13 @@
       // Se la conversazione è terminata, mostra il pulsante di conferma
       if (!data.isActive && data.collectedData) {
         addConfirmationButton();
+      }
+      
+      // Salva lo stato in localStorage
+      try {
+        localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify(conversationState));
+      } catch (e) {
+        console.warn('Impossibile salvare lo stato in localStorage:', e);
       }
       
       // Aggiornamento debug panel
@@ -1101,6 +1136,13 @@
       messages: [],
       collectedData: null
     };
+    
+    // Rimuovi i dati dal localStorage
+    try {
+      localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
+    } catch (e) {
+      console.warn('Impossibile rimuovere lo stato da localStorage:', e);
+    }
     
     // Avvio nuova conversazione
     startConversation();
