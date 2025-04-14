@@ -22,8 +22,15 @@
     // Nome dei dati in localStorage (solo per ripristino UI, non per dati sensibili)
     STORAGE_KEY: 'dietingwithjoeConversationState',
     // Debug mode
-    DEBUG: false
+    DEBUG: false,
+    // Rilevazione mobile
+    IS_MOBILE: /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent.toLowerCase())
   };
+  
+  // Stampa info di debug
+  console.log(`App inizializzata: ${APP_CONFIG.IS_MOBILE ? 'mobile' : 'desktop'}`);
+  console.log(`User agent: ${navigator.userAgent}`);
+  
 
   // Ottieni la lingua corrente o usa l'italiano come fallback
   let currentLang = 'it';

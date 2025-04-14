@@ -59,14 +59,24 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Configurazione sessione
+// Funzione per determinare se usare cookie secure
+const isSecure = () => {
+  // In Fly.io tutti gli accessi sono già protetti da HTTPS
+  if (process.env.FLY_APP_NAME) {
+    return true;
+  }
+  // Altrimenti usiamo la variabile d'ambiente
+  return process.env.NODE_ENV === 'production';
+};
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'nutriplan_secret_key',
-  resave: true, // Cambiato da false a true per garantire sessioni persistenti
+  resave: true, // Per garantire sessioni persistenti
   saveUninitialized: true,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecure(), // Logica migliorata per Fly.io
     httpOnly: true, // Protegge contro attacchi XSS
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 giorni (esteso da 24 ore)
+    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 giorni
     sameSite: 'lax' // Migliore compatibilità su mobile
   }
 }));
@@ -76,7 +86,7 @@ const csrfProtection = csurf({
   cookie: { 
     httpOnly: true, 
     sameSite: 'lax', // Compatibilità mobile
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecure(), // Usa la stessa logica della sessione
     maxAge: 1000 * 60 * 60 * 24 * 7 // 7 giorni (stessa durata della sessione)
   } 
 });
@@ -111,18 +121,32 @@ app.set('views', path.join(__dirname, 'views'));
 
 // Middleware per raccogliere info sul client
 app.use((req, res, next) => {
-  const parser = new UAParser(req.headers['user-agent']);
+  const userAgent = req.headers['user-agent'] || '';
+  const parser = new UAParser(userAgent);
+  const result = parser.getResult();
+  
+  // Determina se è un dispositivo mobile
+  const isMobile = 
+    (result.device.type === 'mobile' || 
+     result.device.type === 'tablet' || 
+     /mobile|android|iphone|ipad|ipod/i.test(userAgent.toLowerCase()));
+  
   req.clientInfo = {
     ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
-    userAgent: req.headers['user-agent'],
+    userAgent: userAgent,
     browser: parser.getBrowser(),
     os: parser.getOS(),
     device: parser.getDevice(),
+    isMobile: isMobile,
     language: req.language || 'it',
     timezone: req.headers['x-timezone'] || 'UTC',
     referrer: req.headers.referer || '',
     sessionId: req.session.id
   };
+  
+  // Log delle informazioni di sessione
+  console.log(`Richiesta ${req.method} ${req.path} da ${isMobile ? 'mobile' : 'desktop'}, sessionId: ${req.session.id.substring(0, 8)}...`);
+  
   next();
 });
 
@@ -803,8 +827,12 @@ app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, re
 app.get('/api/conversation/state', csrfProtection, (req, res) => {
   const conversationId = req.session.id;
   const conversation = conversations.get(conversationId);
+  const isMobile = req.clientInfo.isMobile;
+  
+  console.log(`Richiesta stato conversazione da ${isMobile ? 'mobile' : 'desktop'}, sessionId: ${conversationId.substring(0, 8)}...`);
   
   if (!conversation) {
+    console.log(`Conversazione non trovata per la sessione ${conversationId.substring(0, 8)}...`);
     return res.json({
       exists: false,
       isActive: true,
@@ -815,9 +843,17 @@ app.get('/api/conversation/state', csrfProtection, (req, res) => {
   
   const state = conversation.getState();
   
+  // Aggiungiamo informazioni di debug
+  console.log(`Stato conversazione: ${state.messages.length} messaggi, step ${state.conversationStep}, isActive: ${state.isActive}`);
+  
   res.json({
     exists: true,
-    ...state
+    ...state,
+    _debug: {
+      sessionId: conversationId.substring(0, 8),
+      isMobile: isMobile,
+      timestamp: new Date().toISOString()
+    }
   });
 });
 
