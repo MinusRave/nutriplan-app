@@ -1,4 +1,4 @@
-// main-ultra-minimal-debug.js - Script client per versione ultra-minimalista con debug
+// main-ultra-minimal.js - Script client per versione ultra-minimalista
 (function() {
     'use strict';
     
@@ -11,10 +11,10 @@
     // Segnala che lo script è stato inizializzato
     window.dietingWithJoeInitialized = true;
     
-    // Debug mode sempre attivo per diagnosticare il problema
-    const DEBUG = true;
+    // Debug mode per diagnosticare eventuali problemi
+    const DEBUG = false;
     
-    // Log con timestamp per miglior controllo
+    // Log di debug
     function debugLog(message) {
       if (DEBUG) {
         const timestamp = new Date().toISOString().substr(11, 12);
@@ -42,7 +42,7 @@
       IS_MOBILE: /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent.toLowerCase())
     };
     
-    // Log info sistema
+    // Stampa info di debug
     debugLog(`App inizializzata: ${APP_CONFIG.IS_MOBILE ? 'mobile' : 'desktop'}`);
     debugLog(`User agent: ${navigator.userAgent}`);
     
@@ -75,7 +75,7 @@
     let socketConnected = false;
     let socketReconnecting = false;
     
-    // IMPORTANTE: Flag per controllare ogni aspetto dell'attivazione della chat
+    // Flag per controllare l'attivazione della chat
     let isChatActive = false;
     let isConversationStarted = false;
     let hasUserInteracted = false;
@@ -121,6 +121,9 @@
   
         debugLog('Elementi DOM caricati');
   
+        // Inizializza il layout della chat
+        initChatLayout();
+  
         // Inizializzazione del cookie consent
         initCookieConsent();
         
@@ -139,6 +142,62 @@
         
         debugLog('Inizializzazione completata, in attesa di interazione utente');
       }, 100);
+    }
+    
+    /**
+     * Inizializza il layout e le funzionalità di scrolling della chat
+     */
+    function initChatLayout() {
+      debugLog('Inizializzazione layout chat...');
+      
+      // Configura l'observer per lo scrolling automatico
+      setupScrollObserver();
+      
+      // Configura handler per lo scroll manuale
+      setupManualScrollHandler();
+      
+      // Verifica dimensioni iniziali e adatta il layout
+      adjustChatLayout();
+      
+      // Aggiungi listener per adattare il layout quando la finestra cambia dimensione
+      window.addEventListener('resize', adjustChatLayout);
+      
+      debugLog('Layout chat inizializzato');
+    }
+  
+    /**
+     * Adatta il layout della chat in base alle dimensioni della finestra
+     */
+    function adjustChatLayout() {
+      if (!elements.chatWrapper) return;
+      
+      // Ottieni altezza della viewport
+      const viewportHeight = window.innerHeight;
+      
+      // Calcola l'altezza che dovrebbe avere il wrapper della chat
+      // sottraendo l'altezza di header, footer e altri elementi fissi
+      let headerHeight = 0;
+      const header = document.querySelector('header');
+      if (header) {
+        headerHeight = header.offsetHeight;
+      }
+      
+      let footerHeight = 0;
+      const footer = document.querySelector('footer');
+      if (footer) {
+        footerHeight = footer.offsetHeight;
+      }
+      
+      // Aggiungi un po' di padding per sicurezza
+      const safetyPadding = 20;
+      
+      // Calcola l'altezza ideale
+      const idealHeight = viewportHeight - headerHeight - footerHeight - safetyPadding;
+      
+      // Imposta l'altezza del wrapper
+      elements.chatWrapper.style.height = `${idealHeight}px`;
+      
+      debugLog(`Layout chat adattato - altezza: ${idealHeight}px`);
     }
     
     // Ripristino stato da localStorage
@@ -189,7 +248,6 @@
       // Log per verificare lo stato degli elementi di marketing
       if (elements.marketingSection) {
         debugLog(`Sezione marketing trovata, classe: ${elements.marketingSection.className}`);
-        debugLog(`Visibilità marketing: ${elements.marketingSection.style.display}`);
       } else {
         debugLog('ERRORE: Sezione marketing non trovata nel DOM');
       }
@@ -1067,6 +1125,9 @@
       buttonContainer.appendChild(confirmButton);
       
       elements.chatMessages.appendChild(buttonContainer);
+      
+      // Assicurati che il bottone sia visibile scrollando in fondo
+      scrollToBottom();
     }
   
     /**
@@ -1296,43 +1357,119 @@
     }
   
     /**
-     * Scorrimento in fondo alla chat
+     * Configura l'observer per lo scrolling automatico
      */
-    /**
- * Scorrimento in fondo alla chat
- * Versione migliorata per assicurare lo scrolling automatico
- */
-function scrollToBottom() {
-    if (elements.chatMessages) {
-      // Metodo 1: scrollIntoView per l'ultimo messaggio
-      const lastMessage = elements.chatMessages.lastElementChild;
-      if (lastMessage) {
-        lastMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }
-      
-      // Metodo 2: imposta scrollTop al massimo valore possibile
-      setTimeout(() => {
-        elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
-      }, 100);
-      
-      // Metodo 3: usa un MutationObserver per mantenere lo scroll in fondo
-      // quando vengono aggiunti nuovi messaggi
-      if (!window.chatObserver) {
-        window.chatObserver = new MutationObserver((mutations) => {
+    function setupScrollObserver() {
+      if (elements.chatMessages && !window.chatScrollObserver) {
+        // Configura l'observer per monitorare aggiunte di nodi (nuovi messaggi)
+        window.chatScrollObserver = new MutationObserver((mutations) => {
+          let shouldScroll = false;
+          const containerHeight = elements.chatMessages.clientHeight;
+          const containerScrollHeight = elements.chatMessages.scrollHeight;
+          const currentScrollPosition = elements.chatMessages.scrollTop;
+          
+          // Siamo vicini al fondo?
+          const isNearBottom = (containerScrollHeight - currentScrollPosition - containerHeight) < 150;
+          
+          // Verifica se sono stati aggiunti nuovi messaggi
           for (const mutation of mutations) {
             if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-              elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+              // Controlla se i nuovi nodi sono messaggi dell'utente o dell'assistente
+              for (const node of mutation.addedNodes) {
+                if (node.classList && (
+                    node.classList.contains('message-user') || 
+                    (node.classList.contains('message-assistant') && isNearBottom) ||
+                    node.classList.contains('confirmation-container')
+                   )) {
+                  shouldScroll = true;
+                  break;
+                }
+              }
             }
+          }
+          
+          // Scorri solo se necessario
+          if (shouldScroll) {
+            scrollToBottom();
           }
         });
         
-        window.chatObserver.observe(elements.chatMessages, {
-          childList: true, 
-          subtree: true
+        // Osserva solo le modifiche al DOM che interessano
+        window.chatScrollObserver.observe(elements.chatMessages, {
+          childList: true,      // Rileva aggiunte o rimozioni di nodi figlio
+          subtree: false,       // Non osservare ricorsivamente tutti i discendenti
+          characterData: false  // Non osservare modifiche al testo
         });
+        
+        // Aggiungi anche un listener per il resize della finestra
+        window.addEventListener('resize', scrollToBottom);
       }
     }
-  }
+  
+    /**
+     * Handler per lo scroll manuale dell'utente
+     */
+    function setupManualScrollHandler() {
+      if (elements.chatMessages && !window.manualScrollHandlerSet) {
+        let userScrolling = false;
+        let scrollTimeout;
+        
+        elements.chatMessages.addEventListener('scroll', () => {
+          userScrolling = true;
+          
+          // Resetta il flag dopo un breve periodo di inattività
+          clearTimeout(scrollTimeout);
+          scrollTimeout = setTimeout(() => {
+            userScrolling = false;
+          }, 1000);
+        });
+        
+        // Salva il flag per evitare di impostare nuovamente il listener
+        window.manualScrollHandlerSet = true;
+      }
+    }
+  
+    /**
+     * Scorrimento in fondo alla chat - versione migliorata in stile ChatGPT
+     */
+    function scrollToBottom() {
+      if (!elements.chatMessages) return;
+      
+      // Trova l'ultimo messaggio o elemento nella chat
+      const messages = elements.chatMessages.children;
+      if (messages.length === 0) return;
+      
+      const lastElement = messages[messages.length - 1];
+      
+      // Calcola l'altezza totale della chat e la posizione corrente
+      const containerHeight = elements.chatMessages.clientHeight;
+      const containerScrollHeight = elements.chatMessages.scrollHeight;
+      const currentScrollPosition = elements.chatMessages.scrollTop;
+      
+      // Determina se siamo già vicini al fondo
+      // Se siamo a meno di 100px dal fondo o l'utente ha iniziato a scorrere manualmente
+      const isNearBottom = (containerScrollHeight - currentScrollPosition - containerHeight) < 100;
+      
+      // Se non siamo vicini al fondo, non scrolliamo automaticamente a meno che non sia
+      // un nuovo messaggio dell'utente o il primo caricamento
+      if (!isNearBottom && messages.length > 2 && 
+          !lastElement.classList.contains('message-user') &&
+          !lastElement.classList.contains('confirmation-container')) {
+        return; // L'utente sta probabilmente leggendo messaggi passati, non disturbare
+      }
+      
+      // Tecnica 1: Usa scrollIntoView per l'elemento più recente
+      lastElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'end' 
+      });
+      
+      // Tecnica 2: Imposta direttamente scrollTop al massimo
+      // con un piccolo ritardo per assicurarsi che il rendering sia completo
+      setTimeout(() => {
+        elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+      }, 50);
+    }
   
     /**
      * Timer di inattività
@@ -1510,9 +1647,8 @@ function scrollToBottom() {
       resetConversation: startNewConversation,
       getState: () => conversationState,
       activateChat: activateChat,
-      startConversation: activateChatAndStartConversation, // Per avviare manualmente la conversazione
-      // Per diagnosi
-      debug: {
+      startConversation: activateChatAndStartConversation,
+      debug: DEBUG ? {
         state: () => ({
           isChatActive,
           isConversationStarted,
@@ -1522,7 +1658,7 @@ function scrollToBottom() {
         }),
         log: debugLog,
         markUserInteracted: markUserInteraction
-      }
+      } : null
     };
     
     // Inizializzazione automatica quando il DOM è pronto
