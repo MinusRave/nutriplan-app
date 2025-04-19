@@ -189,13 +189,22 @@
       }
       
       // Aggiungi un po' di padding per sicurezza
-      const safetyPadding = 20;
+      const safetyPadding = APP_CONFIG.IS_MOBILE ? 80 : 20;
       
       // Calcola l'altezza ideale
       const idealHeight = viewportHeight - headerHeight - footerHeight - safetyPadding;
       
       // Imposta l'altezza del wrapper
       elements.chatWrapper.style.height = `${idealHeight}px`;
+      
+      // Su mobile, imposta anche l'altezza dei messaggi
+      if (APP_CONFIG.IS_MOBILE) {
+        const inputHeight = elements.chatInput ? elements.chatInput.offsetHeight + 40 : 60;
+        const messagesHeight = idealHeight - inputHeight;
+        if (elements.chatMessages) {
+          elements.chatMessages.style.height = `${messagesHeight}px`;
+        }
+      }
       
       debugLog(`Layout chat adattato - altezza: ${idealHeight}px`);
     }
@@ -703,7 +712,68 @@
         }
       });
       
+      // Ascoltatore per la gestione della tastiera mobile
+      if (APP_CONFIG.IS_MOBILE) {
+        // Usa la visibleViewport API se disponibile
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', handleVisualViewportResize);
+          window.visualViewport.addEventListener('scroll', handleVisualViewportResize);
+        } else {
+          // Fallback per browser più vecchi
+          window.addEventListener('resize', handleMobileResize);
+        }
+        
+        debugLog('Event listener per tastiera mobile impostato');
+      }
+      
       debugLog('Tutti gli event listener configurati');
+    }
+    
+    /**
+     * Funzione per gestire il viewport visibile
+     */
+    function handleVisualViewportResize() {
+      if (!elements.chatWrapper || !elements.chatMessages || !elements.chatInput) return;
+      
+      const viewportHeight = window.visualViewport.height;
+      const windowHeight = window.innerHeight;
+      
+      // Rileva se la tastiera è aperta (viewport più piccolo della finestra)
+      const keyboardOpen = viewportHeight < windowHeight * 0.8;
+      
+      if (keyboardOpen) {
+        // Quando la tastiera è aperta, riduci l'altezza della chat e assicurati che l'input sia visibile
+        elements.chatWrapper.style.height = `${viewportHeight - 60}px`;
+        elements.chatMessages.style.height = `${viewportHeight - 120}px`;
+        // Scorri in fondo per mostrare i messaggi più recenti
+        scrollToBottom();
+        // Fai uno scroll extra per assicurarti che l'input sia visibile
+        window.scrollTo(0, window.visualViewport.offsetTop + window.visualViewport.height);
+      } else {
+        // Quando la tastiera è chiusa, ripristina le altezze normali
+        adjustChatLayout();
+      }
+    }
+    
+    /**
+     * Versione di fallback per browser più vecchi
+     */
+    function handleMobileResize() {
+      if (!APP_CONFIG.IS_MOBILE) return;
+      
+      const viewportHeight = window.innerHeight;
+      
+      // Usa un valore di riferimento per rilevare se la tastiera potrebbe essere aperta
+      if (viewportHeight < 500) {
+        // Possibile tastiera aperta
+        if (elements.chatWrapper) {
+          elements.chatWrapper.style.height = `${viewportHeight - 60}px`;
+        }
+        scrollToBottom();
+      } else {
+        // Tastiera chiusa
+        adjustChatLayout();
+      }
     }
     
     /**
@@ -831,6 +901,11 @@
       // Focus sull'input
       if (elements.chatInput) {
         setTimeout(() => {
+          if (APP_CONFIG.IS_MOBILE) {
+            // Su mobile, scrolliamo alla posizione dell'input
+            const inputRect = elements.chatInput.getBoundingClientRect();
+            window.scrollTo(0, window.scrollY + inputRect.top - window.innerHeight / 2);
+          }
           elements.chatInput.focus();
         }, 300);
       }
@@ -1067,6 +1142,21 @@
         
         // Traccia evento
         trackEvent('message_sent');
+        
+        // Aggiunto per mobile: posizionamento dopo l'invio
+        if (APP_CONFIG.IS_MOBILE) {
+          // Piccolo ritardo per dare tempo al browser di elaborare l'invio
+          setTimeout(() => {
+            scrollToBottom();
+            // Posiziona la pagina in modo che l'input sia visibile
+            if (elements.chatInput) {
+              const inputRect = elements.chatInput.getBoundingClientRect();
+              if (inputRect.bottom > window.innerHeight) {
+                window.scrollTo(0, window.scrollY + (inputRect.bottom - window.innerHeight) + 20);
+              }
+            }
+          }, 100);
+        }
       } catch (error) {
         debugLog(`Errore nell'invio del messaggio: ${error.message}`);
         handleCommunicationError();
@@ -1451,16 +1541,17 @@
       const isNearBottom = (containerScrollHeight - currentScrollPosition - containerHeight) < 100;
       
       // Se non siamo vicini al fondo, non scrolliamo automaticamente a meno che non sia
-      // un nuovo messaggio dell'utente o il primo caricamento
+      // un nuovo messaggio dell'utente o il primo caricamento o siamo su mobile con tastiera aperta
       if (!isNearBottom && messages.length > 2 && 
           !lastElement.classList.contains('message-user') &&
-          !lastElement.classList.contains('confirmation-container')) {
+          !lastElement.classList.contains('confirmation-container') && 
+          !APP_CONFIG.IS_MOBILE) {
         return; // L'utente sta probabilmente leggendo messaggi passati, non disturbare
       }
       
       // Tecnica 1: Usa scrollIntoView per l'elemento più recente
       lastElement.scrollIntoView({ 
-        behavior: 'smooth', 
+        behavior: APP_CONFIG.IS_MOBILE ? 'auto' : 'smooth', 
         block: 'end' 
       });
       
@@ -1468,7 +1559,18 @@
       // con un piccolo ritardo per assicurarsi che il rendering sia completo
       setTimeout(() => {
         elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
-      }, 50);
+        
+        // Su mobile, assicurati che l'input sia visibile
+        if (APP_CONFIG.IS_MOBILE && elements.chatInput) {
+          // Piccolo ritardo extra per dispositivi più lenti
+          setTimeout(() => {
+            const inputRect = elements.chatInput.getBoundingClientRect();
+            if (inputRect.top > window.innerHeight || inputRect.bottom < 0) {
+              window.scrollTo(0, document.body.scrollHeight);
+            }
+          }, 50);
+        }
+      }, APP_CONFIG.IS_MOBILE ? 0 : 50);
     }
   
     /**

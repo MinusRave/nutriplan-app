@@ -446,7 +446,14 @@ a:hover, a:focus {
   margin: 0 auto;
   width: 100%;
   transition: padding-top var(--transition-base);
-  height: calc(100vh - 220px); /* Adattabile in base all'header e footer */
+  min-height: 300px;
+  height: auto;
+}
+
+@media (min-width: 769px) {
+  .chat-wrapper {
+    height: calc(100vh - 220px);
+  }
 }
 
 .chat-active .chat-wrapper {
@@ -643,6 +650,21 @@ a:hover, a:focus {
   z-index: var(--z-index-fixed);
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.03);
   margin-top: auto;
+}
+
+@media (max-width: 768px) {
+  .chat-input-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+  }
+  
+  /* Aggiungi padding al fondo per evitare che l'input scompaia */
+  .messages-container {
+    padding-bottom: 70px;
+  }
 }
 
 .chat-input-container::before {
@@ -975,10 +997,6 @@ a:hover, a:focus {
     width: 18px;
     height: 18px;
   }
-  
-  .chat-wrapper {
-    height: calc(100vh - 180px);
-  }
 }
 
 @media (max-width: 480px) {
@@ -1013,10 +1031,6 @@ a:hover, a:focus {
   
   .message {
     max-width: 95%;
-  }
-  
-  .chat-wrapper {
-    height: calc(100vh - 150px);
   }
 }
 
