@@ -19,6 +19,8 @@
     MAX_RETRIES: 3,
     // Timeout per la risposta in millisecondi (60 secondi)
     RESPONSE_TIMEOUT: 60 * 1000,
+    // Timeout per la riconnessione websocket (3 secondi)
+    RECONNECT_TIMEOUT: 3000,
     // Nome dei dati in localStorage (solo per ripristino UI, non per dati sensibili)
     STORAGE_KEY: 'dietingwithjoeConversationState',
     // Debug mode
@@ -58,8 +60,10 @@
   let inactivityTimer = null;
   let retryCount = 0;
   let isSubmitting = false;
-  let currentStreamId = null; // ID dell'ultima connessione streaming
-  let pendingStreamConnection = null; // Reference all'ultima connessione SSE
+  // Socket.io connection
+  let socket = null;
+  let socketConnected = false;
+  let socketReconnecting = false;
 
   // Traduzioni - utilizza quelle fornite dal server o le predefinite
   const defaultTranslations = {
@@ -124,6 +128,9 @@
     elements.languageToggle = document.querySelector('.language-toggle');
     elements.languageDropdown = document.querySelector('.language-dropdown');
     elements.csrfToken = document.getElementById('csrf-token');
+    elements.connectionStatus = document.getElementById('connection-status');
+    elements.connectionMessage = document.getElementById('connection-message');
+    elements.reconnectButton = document.getElementById('reconnect-button');
     
     // Debug elements
     elements.debug = {};
@@ -133,23 +140,349 @@
       elements.debug.content = document.getElementById('debug-content');
       elements.debug.conversationLog = document.getElementById('conversation-log');
       elements.debug.clientInfoDisplay = document.getElementById('client-info');
+      elements.debug.socketStatus = document.getElementById('socket-status');
+    }
+  }
+  
+  /**
+   * Inizializza la connessione WebSocket
+   */
+  function initSocketConnection() {
+    // Se c'è già una connessione attiva, non fare nulla
+    if (socket && socket.connected) return;
+    
+    // Crea una nuova connessione socket
+    socket = io({
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: APP_CONFIG.RECONNECT_TIMEOUT,
+      timeout: APP_CONFIG.RESPONSE_TIMEOUT,
+      query: { 
+        lang: currentLang
+      }
+    });
+    
+    // Gestione eventi socket
+    setupSocketListeners();
+    
+    // Autentica la connessione con il sessionId
+    const sessionId = window.clientInfo && window.clientInfo.sessionId;
+    if (sessionId) {
+      socket.emit('authenticate', { 
+        sessionId: sessionId,
+        csrfToken: elements.csrfToken ? elements.csrfToken.value : null
+      });
+      
+      log(`Tentativo di autenticazione socket con sessionId: ${sessionId}`);
+    } else {
+      log('Impossibile autenticare socket: sessionId mancante');
+      
+      if (elements.connectionStatus) {
+        elements.connectionStatus.classList.remove('hidden');
+        if (elements.connectionMessage) {
+          elements.connectionMessage.textContent = translations.error.auth || 'Errore di autenticazione';
+        }
+      }
+    }
+  }
+  
+  /**
+   * Imposta i listener per gli eventi WebSocket
+   */
+  function setupSocketListeners() {
+    if (!socket) return;
+    
+    // Evento di connessione
+    socket.on('connect', () => {
+      log(`Socket connesso: ${socket.id}`);
+      socketConnected = true;
+      socketReconnecting = false;
+      
+      if (elements.connectionStatus) {
+        elements.connectionStatus.classList.add('hidden');
+      }
+      
+      if (elements.debug && elements.debug.socketStatus) {
+        elements.debug.socketStatus.textContent = `Socket: Connesso (${socket.id})`;
+      }
+      
+      // Autentica la connessione ogni volta che ci connettiamo o riconnettiamo
+      const sessionId = window.clientInfo && window.clientInfo.sessionId;
+      if (sessionId) {
+        socket.emit('authenticate', { 
+          sessionId: sessionId,
+          csrfToken: elements.csrfToken ? elements.csrfToken.value : null
+        });
+      }
+    });
+    
+    // Evento di disconnessione
+    socket.on('disconnect', (reason) => {
+      log(`Socket disconnesso: ${reason}`);
+      socketConnected = false;
+      
+      if (elements.debug && elements.debug.socketStatus) {
+        elements.debug.socketStatus.textContent = `Socket: Disconnesso (${reason})`;
+      }
+      
+      // Mostra avviso di disconnessione solo se non siamo già in fase di riconnessione
+      if (!socketReconnecting) {
+        socketReconnecting = true;
+        
+        if (elements.connectionStatus) {
+          elements.connectionStatus.classList.remove('hidden');
+          if (elements.connectionMessage) {
+            elements.connectionMessage.textContent = translations.error.connection || 'Connessione persa';
+          }
+        }
+      }
+    });
+    
+    // Evento di riconnessione
+    socket.on('reconnect_attempt', (attemptNumber) => {
+      log(`Tentativo di riconnessione socket #${attemptNumber}`);
+      socketReconnecting = true;
+      
+      if (elements.connectionStatus) {
+        elements.connectionStatus.classList.remove('hidden');
+        if (elements.connectionMessage) {
+          elements.connectionMessage.textContent = `${translations.messages.retry || 'Riconnessione in corso...'} (${attemptNumber})`;
+        }
+      }
+      
+      if (elements.debug && elements.debug.socketStatus) {
+        elements.debug.socketStatus.textContent = `Socket: Riconnessione #${attemptNumber}`;
+      }
+    });
+    
+    // Evento di fallimento riconnessione
+    socket.on('reconnect_failed', () => {
+      log('Riconnessione socket fallita dopo tutti i tentativi');
+      socketReconnecting = false;
+      
+      if (elements.connectionStatus) {
+        elements.connectionStatus.classList.remove('hidden');
+        if (elements.connectionMessage) {
+          elements.connectionMessage.textContent = translations.error.reconnect || 'Impossibile riconnettersi';
+        }
+      }
+      
+      if (elements.debug && elements.debug.socketStatus) {
+        elements.debug.socketStatus.textContent = 'Socket: Riconnessione fallita';
+      }
+    });
+    
+    // Evento di errore
+    socket.on('error', (error) => {
+      console.error('Errore socket:', error);
+      
+      if (elements.debug && elements.debug.socketStatus) {
+        elements.debug.socketStatus.textContent = `Socket: Errore (${error.message || 'sconosciuto'})`;
+      }
+    });
+    
+    // Messaggi di risposta dal server
+    socket.on('conversation_state', (data) => {
+      log('Ricevuto stato conversazione dal server');
+      
+      handleConversationState(data);
+    });
+    
+    // Ricezione dei chunk di risposta dell'assistente
+    socket.on('assistant_chunk', (data) => {
+      handleAssistantChunk(data);
+    });
+    
+    // Aggiornamento dello stato della conversazione
+    socket.on('conversation_updated', (data) => {
+      log('Ricevuto aggiornamento stato conversazione');
+      
+      // Aggiorna stato
+      if (data) {
+        conversationState.isActive = data.isActive;
+        conversationState.conversationStep = data.conversationStep;
+        
+        if (data.conversationId) {
+          conversationState.conversationUUID = data.conversationId;
+        }
+        
+        if (data.collectedData) {
+          conversationState.collectedData = data.collectedData;
+        }
+        
+        // Se la conversazione è terminata, mostra il pulsante di conferma
+        if (!data.isActive && data.collectedData) {
+          addConfirmationButton();
+        }
+      }
+      
+      // Aggiorna debug panel
+      updateDebugPanel();
+    });
+    
+    // Pulsante di riconnessione manuale
+    if (elements.reconnectButton) {
+      elements.reconnectButton.addEventListener('click', () => {
+        if (socket) {
+          log('Tentativo di riconnessione manuale');
+          socket.connect();
+        } else {
+          initSocketConnection();
+        }
+      });
+    }
+  }
+  
+  /**
+   * Gestisce l'elaborazione dello stato conversazione ricevuto dal server
+   */
+  function handleConversationState(data) {
+    if (!data) return;
+    
+    // Se sul server la conversazione esiste ed è più aggiornata
+    if (data.exists && 
+       (!conversationState.exists || data.messages.length > conversationState.messages.length)) {
+      
+      // Aggiorna lo stato della conversazione
+      conversationState = data;
+      
+      // Salviamo l'UUID della conversazione se presente
+      if (data.conversationId) {
+        conversationState.conversationUUID = data.conversationId;
+      }
+      
+      // Reset UI per assicurarci di non duplicare messaggi
+      if (elements.chatMessages) {
+        elements.chatMessages.innerHTML = '';
+      }
+      
+      // Visualizza i messaggi
+      data.messages.forEach(msg => {
+        if (msg.role === 'user') {
+          addUserMessage(msg.content);
+        } else if (msg.role === 'assistant') {
+          addAssistantMessage(msg.content);
+        }
+      });
+      
+      // Se la conversazione è terminata, mostra il pulsante di conferma
+      if (!data.isActive && data.collectedData) {
+        addConfirmationButton();
+      }
+      
+      // Scorrimento automatico in fondo
+      scrollToBottom();
+      
+      // Aggiorna debug panel
+      updateDebugPanel();
+    } else if (!data.exists) {
+      // Se non esiste ancora una conversazione, iniziane una nuova
+      startConversation();
+    }
+  }
+  
+  /**
+   * Gestisce i chunk di risposta dell'assistente
+   */
+  function handleAssistantChunk(data) {
+    if (!data) return;
+    
+    // Se è il primo chunk, crea un messaggio placeholder
+    let messageElement = document.querySelector('.message-assistant:last-child');
+    let messageTextElement;
+    
+    if (!messageElement) {
+      messageElement = createMessageElement('assistant', '');
+      if (elements.chatMessages) {
+        elements.chatMessages.appendChild(messageElement);
+      }
+    }
+    
+    // Ottieni l'elemento di testo
+    messageTextElement = messageElement.querySelector('.message-text');
+    
+    // Se c'è un chunk da aggiungere
+    if (data.chunk) {
+      // Aggiorna il contenuto del messaggio
+      if (messageTextElement) {
+        if (data.message) {
+          // Se c'è un messaggio completo, usalo direttamente
+          messageTextElement.innerHTML = formatMessage(data.message);
+        } else {
+          // Altrimenti aggiungi solo il chunk
+          const currentContent = messageTextElement.innerHTML;
+          const newContent = formatMessage(currentContent + data.chunk);
+          messageTextElement.innerHTML = newContent;
+        }
+        scrollToBottom();
+      }
+    }
+    
+    // Gestione della completezza del messaggio
+    if (data.isComplete) {
+      // Final update
+      if (messageTextElement && data.message) {
+        messageTextElement.innerHTML = formatMessage(data.message);
+      }
+      
+      // Mantieni traccia del messaggio completo
+      const messageContent = data.message || messageTextElement.textContent;
+      
+      // Aggiorna lo stato della conversazione
+      conversationState.messages.push({ role: 'assistant', content: messageContent });
+      conversationState.conversationStep = data.conversationStep || conversationState.conversationStep;
+      conversationState.isActive = data.isActive;
+      
+      if (data.collectedData) {
+        conversationState.collectedData = data.collectedData;
+        
+        // Se la conversazione è terminata, mostra il pulsante di conferma
+        if (!data.isActive) {
+          addConfirmationButton();
+        }
+      }
+      
+      // Nascondi l'indicatore di digitazione
+      hideTypingIndicator();
+      
+      // Termina la sottomissione
+      isSubmitting = false;
+      
+      // Riabilita input e pulsante
+      if (elements.chatInput) {
+        elements.chatInput.disabled = false;
+        elements.chatInput.classList.remove('disabled');
+        elements.chatInput.focus();
+      }
+      
+      if (elements.sendButton) {
+        elements.sendButton.disabled = false;
+        elements.sendButton.classList.remove('disabled');
+      }
+      
+      // Aggiorna debug panel
+      updateDebugPanel();
+      
+      // Reset del contatore di tentativi
+      retryCount = 0;
+      
+      // Traccia evento
+      trackEvent('message_received');
     }
   }
   
   // Inizia il processo di conversazione
   async function initConversation() {
     try {
-      // Controlla se esiste già una conversazione
-      const conversationExists = await checkExistingConversation();
+      // Inizializza la connessione WebSocket
+      initSocketConnection();
       
-      // Se non esiste una conversazione, iniziane una nuova
-      if (!conversationExists) {
-        startConversation();
-      }
+      // Lo stato iniziale verrà ricevuto attraverso l'evento conversation_state
+      // dopo l'autenticazione della connessione WebSocket
     } catch (error) {
       console.error('Errore nell\'inizializzazione della conversazione:', error);
-      // Prova comunque a iniziare una nuova conversazione
-      startConversation();
+      // Mostra messaggio di errore all'utente
+      addAssistantMessage(translations.error.generic);
     }
   }
 
@@ -165,81 +498,13 @@
 
   /**
    * Controlla se esiste già una conversazione sul server
+   * Con WebSocket, questa verifica viene fatta automaticamente durante l'autenticazione
+   * Questa funzione rimane per compatibilità con il codice esistente
    */
   async function checkExistingConversation() {
-    try {
-      // Verifichiamo solo sul server - non usiamo più il localStorage per conversazioni incomplete
-      return await fetchServerState();
-    } catch (error) {
-      console.error('Errore nel controllo della conversazione:', error);
-      return false;
-    }
-  }
-  
-  // Funzione separata per recuperare lo stato dal server
-  async function fetchServerState() {
-    try {
-      if (!elements.csrfToken || !elements.csrfToken.value) {
-        console.error("CSRF token mancante");
-        return false;
-      }
-      
-      const response = await fetch('/api/conversation/state', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': elements.csrfToken.value
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Errore nella richiesta di stato');
-      }
-      
-      const data = await response.json();
-      
-      // Se sul server la conversazione esiste ed è più aggiornata del localStorage
-      if (data.exists && 
-         (!conversationState.exists || data.messages.length > conversationState.messages.length)) {
-        
-        // Aggiorna lo stato della conversazione
-        conversationState = data;
-        
-        // Salviamo l'UUID della conversazione se presente
-        if (data.conversationUUID) {
-          conversationState.conversationUUID = data.conversationUUID;
-        }
-        
-        // Reset UI per assicurarci di non duplicare messaggi
-        if (elements.chatMessages) {
-          elements.chatMessages.innerHTML = '';
-        }
-        
-        // Visualizza i messaggi
-        data.messages.forEach(msg => {
-          if (msg.role === 'user') {
-            addUserMessage(msg.content);
-          } else if (msg.role === 'assistant') {
-            addAssistantMessage(msg.content);
-          }
-        });
-        
-        // Se la conversazione è terminata, mostra il pulsante di conferma
-        if (!data.isActive && data.collectedData) {
-          addConfirmationButton();
-        }
-        
-        // Scorrimento automatico in fondo
-        scrollToBottom();
-        
-        // Non salviamo più lo stato durante la conversazione
-      }
-      
-      return data.exists;
-    } catch (error) {
-      console.error('Errore nel controllo della conversazione dal server:', error);
-      return conversationState.exists || false;
-    }
+    // Con WebSocket, lo stato viene recuperato automaticamente durante la connessione
+    // dopo l'evento 'authenticate'
+    return conversationState.exists;
   }
 
   /**
@@ -298,9 +563,9 @@
 
     // Gestione della chiusura finestra/tab
     window.addEventListener('beforeunload', function() {
-      // Chiudi esplicitamente qualsiasi connessione streaming attiva
-      if (pendingStreamConnection && pendingStreamConnection.readyState !== 2) { // 2 = CLOSED
-        pendingStreamConnection.close();
+      // Chiudi esplicitamente la connessione WebSocket
+      if (socket && socketConnected) {
+        socket.disconnect();
       }
     });
   }
@@ -394,77 +659,99 @@
   /**
    * Avvio della conversazione
    */
-  async function startConversation() {
+  function startConversation() {
     try {
-      if (!elements.csrfToken || !elements.csrfToken.value) {
-        console.error("CSRF token mancante");
-        addAssistantMessage(translations.error.generic);
+      // Verifica che il socket sia connesso
+      if (!socket || !socketConnected) {
+        log('Socket non connesso, riconnessione...');
+        initSocketConnection();
+        
+        // Aggiungiamo un listener temporaneo per avviare la conversazione dopo la connessione
+        const onConnect = () => {
+          socket.off('connect', onConnect);
+          // Avvia conversazione dopo un breve delay per assicurarsi che l'autenticazione sia completa
+          setTimeout(() => {
+            emitStartConversation();
+          }, 500);
+        };
+        
+        socket.on('connect', onConnect);
         return;
       }
       
-      // Chiudi eventuali connessioni streaming attive
-      if (pendingStreamConnection && pendingStreamConnection.readyState !== 2) { // 2 = CLOSED
-        console.log("Chiusura connessione streaming precedente");
-        pendingStreamConnection.close();
-        pendingStreamConnection = null;
-      }
-      
-      // Reset dello stato
-      currentStreamId = null;
-      
-      // Richiedi l'inizio di una nuova conversazione
-      const response = await fetch('/api/conversation/start', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': elements.csrfToken.value
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Errore nell\'avvio della conversazione');
-      }
-      
-      const data = await response.json();
-      
-      // Aggiorna lo stato
-      conversationState.exists = true;
-      conversationState.conversationStep = data.conversationStep || 1;
-      conversationState.messages = [
-        { role: 'assistant', content: data.message }
-      ];
-      
-      // Salviamo l'UUID della conversazione se presente
-      if (data.conversationUUID) {
-        conversationState.conversationUUID = data.conversationUUID;
-      }
-      
-      // Aggiungi il messaggio di benvenuto
-      addAssistantMessage(data.message);
-      
-      // Focus sull'input
-      if (elements.chatInput) {
-        elements.chatInput.focus();
-      }
-      
-      // Traccia evento
-      trackEvent('conversation_start');
+      // Se già connesso, emetti direttamente
+      emitStartConversation();
     } catch (error) {
       console.error('Errore nell\'avvio della conversazione:', error);
       addAssistantMessage(translations.error.generic);
     }
   }
+  
+  /**
+   * Invia richiesta di avvio conversazione tramite WebSocket
+   */
+  function emitStartConversation() {
+    // Mostra l'indicatore di digitazione
+    showTypingIndicator();
+    
+    // Emetti evento di inizio conversazione
+    socket.emit('start_conversation', {
+      language: currentLang
+    });
+    
+    log('Richiesta avvio conversazione inviata');
+    
+    // Reset dello stato conversazione
+    conversationState.exists = true;
+    conversationState.isActive = true;
+    conversationState.conversationStep = 0;
+    conversationState.messages = [];
+    conversationState.collectedData = null;
+    
+    // I messaggi e altri dati arriveranno attraverso l'evento conversation_state
+    
+    // Traccia evento
+    trackEvent('conversation_start');
+  }
 
   /**
    * Invio messaggio utente
    */
-  async function handleSubmitMessage(e) {
+  function handleSubmitMessage(e) {
     e.preventDefault();
     
     if (!elements.chatInput) return;
     
     const userInput = elements.chatInput.value.trim();
     if (!userInput || isSubmitting) return;
+    
+    // Verifica che il socket sia connesso
+    if (!socket || !socketConnected) {
+      log('Socket non connesso, riconnessione...');
+      
+      // Salva temporaneamente il messaggio
+      const messageToSend = userInput;
+      
+      // Reconnect
+      initSocketConnection();
+      
+      // Aggiungi un listener temporaneo per inviare il messaggio dopo la connessione
+      const onConnect = () => {
+        socket.off('connect', onConnect);
+        
+        // Invia il messaggio dopo un breve delay per assicurarsi che l'autenticazione sia completa
+        setTimeout(() => {
+          // Ripristina il valore dell'input e triggera l'invio
+          elements.chatInput.value = messageToSend;
+          if (elements.chatForm) {
+            elements.chatForm.dispatchEvent(new Event('submit'));
+          }
+        }, 1000);
+      };
+      
+      socket.on('connect', onConnect);
+      return;
+    }
     
     // Reset del timer di inattività
     resetInactivityTimer();
@@ -477,8 +764,6 @@
     
     // Aggiornamento dei dati della conversazione
     conversationState.messages.push({ role: 'user', content: userInput });
-    
-    // Non salviamo più lo stato durante la conversazione
     
     // Flag per evitare invii multipli
     isSubmitting = true;
@@ -494,359 +779,34 @@
       elements.sendButton.classList.add('disabled');
     }
     
-    // Chiudi eventuali connessioni streaming attive
-    if (pendingStreamConnection && pendingStreamConnection.readyState !== 2) { // 2 = CLOSED
-      console.log("Chiusura connessione streaming precedente");
-      pendingStreamConnection.close();
-      pendingStreamConnection = null;
-    }
-    
-    // Reset dello stato
-    currentStreamId = null;
-    
     // Mostra l'indicatore di digitazione avanzato
     showTypingIndicator(true); // true = modalità avanzata
     
     try {
-      if (!elements.csrfToken || !elements.csrfToken.value) {
-        throw new Error("CSRF token mancante");
-      }
-
-      // Crea assistant message placeholder per lo streaming
-      const assistantMessageElement = createMessageElement('assistant', '');
-      if (elements.chatMessages) {
-        elements.chatMessages.appendChild(assistantMessageElement);
-      }
-      
-      const messageTextElement = assistantMessageElement.querySelector('.message-text');
-      
-      // Supportiamo lo streaming SSE
-      const supportsSSE = true;
-      
-      if (supportsSSE) {
-        // STREAMING APPROACH
-        // Imposta un timeout per il fallback
-        const streamTimeoutId = setTimeout(() => {
-          console.warn('Stream timeout, falling back to traditional request');
-          // Elimina il messaggio placeholder creato per lo streaming
-          if (assistantMessageElement && elements.chatMessages) {
-            elements.chatMessages.removeChild(assistantMessageElement);
-          }
-          handleTraditionalRequest(userInput);
-        }, APP_CONFIG.RESPONSE_TIMEOUT);
-        
-        try {
-          // Prepara per la richiesta streaming
-          const eventUrl = `/api/conversation/message`;
-          
-          // Usa fetch per iniziare lo streaming
-          const response = await fetch(eventUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRF-Token': elements.csrfToken.value
-            },
-            body: JSON.stringify({ message: userInput, stream: true })
-          });
-          
-          if (!response.ok) {
-            throw new Error('Errore nella comunicazione con il server');
-          }
-          
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = '';
-          let fullMessage = '';
-          let conversationStep = conversationState.conversationStep;
-          let isActive = true;
-          let collectedData = null;
-          
-          // Funzione per processare i chunk
-          async function readChunks() {
-            try {
-              // Aggiungiamo un flag per tracciare se la risposta è stata completata
-              let messageCompleted = false;
-              
-              while (true) {
-                const { value, done } = await reader.read();
-                
-                if (done) {
-                  console.log('Stream terminato dal server');
-                  break;
-                }
-                
-                // Decode the chunk and add to buffer
-                buffer += decoder.decode(value, { stream: true });
-                
-                // Process complete SSE messages
-                // Split by standard SSE message separator
-                const lines = buffer.split('\n\n');
-                buffer = lines.pop() || ''; // Keep the last incomplete chunk in buffer
-                
-                for (const line of lines) {
-                  if (!line.trim()) continue;
-                  
-                  // Extract the data part (handle different SSE formats)
-                  let dataContent = line;
-                  
-                  // Normalize SSE format - handle different server implementations
-                  if (line.startsWith('data: ')) {
-                    dataContent = line.replace(/^data: /, '');
-                  } else if (line.includes('\ndata: ')) {
-                    // Match multiline SSE data format
-                    const matches = line.match(/data: (.*?)(?:\n|$)/g);
-                    if (matches && matches.length) {
-                      // Concatenate multiple data lines if present
-                      dataContent = matches
-                        .map(m => m.replace(/^data: /, '').trim())
-                        .join('');
-                    }
-                  }
-                  
-                  try {
-                    // Remove any unexpected characters that might be causing JSON parse errors
-                    const cleanedData = dataContent.trim().replace(/^data:\s*/, '');
-                    // Tronchiamo il log per evitare output eccessivo
-                    const logPreview = cleanedData.length > 50 ? cleanedData.substring(0, 50) + '...' : cleanedData;
-                    console.log('Processing SSE data chunk:', logPreview);
-                    
-                    const eventData = JSON.parse(cleanedData);
-                    
-                    // Verifica se c'è un ID richiesta e gestisci di conseguenza
-                    if (eventData.requestId) {
-                      // Se è il primo chunk, salva l'ID
-                      if (currentStreamId === null) {
-                        currentStreamId = eventData.requestId;
-                      } 
-                      // Se l'ID non corrisponde, ignora questo chunk (è da una richiesta precedente)
-                      else if (currentStreamId !== eventData.requestId) {
-                        console.log(`Ignorato chunk da richiesta diversa: ${eventData.requestId} (corrente: ${currentStreamId})`);
-                        continue;
-                      }
-                    }
-                    
-                    // Gestione richiesta di chiusura forzata
-                    if (eventData.forceClose) {
-                      console.log('Ricevuta richiesta di chiusura forzata della connessione');
-                      break;
-                    }
-                    
-                    // Elabora il chunk normale
-                    if (eventData.chunk) {
-                      fullMessage += eventData.chunk;
-                      if (messageTextElement) {
-                        messageTextElement.innerHTML = formatMessage(fullMessage);
-                        scrollToBottom();
-                      }
-                    }
-                    
-                    if (eventData.isComplete) {
-                      console.log('Ricevuto segnale di completamento messaggio');
-                      // Marchiamo il messaggio come completato per evitare ulteriori processamenti
-                      messageCompleted = true;
-                      
-                      // Final update
-                      conversationStep = eventData.conversationStep || conversationStep;
-                      isActive = eventData.isActive;
-                      if (eventData.collectedData) {
-                        collectedData = eventData.collectedData;
-                      }
-                      
-                      // Finalizziamo immediatamente lo stato quando riceviamo il segnale di completamento
-                      console.log('Aggiornamento stato conversazione con messaggio completo');
-                      // IMPORTANTE: Aggiungiamo sempre il messaggio assistente senza verifiche
-                      // per garantire che la conversazione proceda normalmente
-                      conversationState.messages.push({ role: 'assistant', content: fullMessage });
-                      conversationState.conversationStep = conversationStep;
-                      conversationState.isActive = isActive;
-                      
-                      if (collectedData) {
-                        conversationState.collectedData = collectedData;
-                        
-                        // Se la conversazione è terminata, mostra il pulsante di conferma
-                        if (!isActive) {
-                          addConfirmationButton();
-                        }
-                      }
-                      
-                      // Interrompiamo il ciclo quando riceviamo il segnale di completamento
-                      break;
-                    }
-                  } catch (err) {
-                    console.error('Error parsing SSE data:', err, 'Raw content:', dataContent);
-                  }
-                }
-              }
-              
-              clearTimeout(streamTimeoutId);
-              
-              // Finalizziamo lo stato solo se non è già stato finalizzato all'interno del loop
-              if (!messageCompleted) {
-                console.log('Stream terminato senza ricevere isComplete=true, finalizzando stato');
-                
-                // IMPORTANTE: Aggiungiamo sempre il messaggio assistente senza verifiche
-                // per garantire che la conversazione proceda normalmente
-                conversationState.messages.push({ role: 'assistant', content: fullMessage });
-                conversationState.conversationStep = conversationStep;
-                conversationState.isActive = isActive;
-                
-                if (collectedData) {
-                  conversationState.collectedData = collectedData;
-                  
-                  // Se la conversazione è terminata, mostra il pulsante di conferma
-                  if (!isActive) {
-                    addConfirmationButton();
-                  }
-                }
-              } else {
-                console.log('Stato già finalizzato durante il processamento dello stream');
-              }
-              
-              // Non salviamo più lo stato durante la conversazione
-              
-              // Aggiornamento debug panel
-              updateDebugPanel();
-              
-              // Reset del contatore di tentativi
-              retryCount = 0;
-              
-              // Traccia evento
-              trackEvent('message_sent');
-            } catch (err) {
-              console.error('Error reading stream:', err);
-              handleCommunicationError();
-            } finally {
-              // Cleanup
-              hideTypingIndicator();
-              isSubmitting = false;
-              
-              // Reset del riferimento alla connessione streaming
-              pendingStreamConnection = null;
-              currentStreamId = null;
-              
-              // Riabilita input e pulsante
-              if (elements.chatInput) {
-                elements.chatInput.disabled = false;
-                elements.chatInput.classList.remove('disabled');
-                elements.chatInput.focus();
-              }
-              
-              if (elements.sendButton) {
-                elements.sendButton.disabled = false;
-                elements.sendButton.classList.remove('disabled');
-              }
-              
-              scrollToBottom();
-            }
-          }
-          
-          // Start processing the stream
-          readChunks();
-          
-        } catch (streamError) {
-          console.error('Stream error, falling back to traditional request:', streamError);
-          clearTimeout(streamTimeoutId);
-          
-          // Elimina il messaggio placeholder creato per lo streaming
-          if (assistantMessageElement && elements.chatMessages) {
-            elements.chatMessages.removeChild(assistantMessageElement);
-          }
-          
-          // Fallback to traditional request
-          await handleTraditionalRequest(userInput);
-        }
-      } else {
-        // NON-STREAMING FALLBACK
-        // Elimina il messaggio placeholder creato per lo streaming
-        if (assistantMessageElement && elements.chatMessages) {
-          elements.chatMessages.removeChild(assistantMessageElement);
-        }
-        
-        await handleTraditionalRequest(userInput);
-      }
-    } catch (error) {
-      console.error('Errore nella comunicazione con il server:', error);
-      handleCommunicationError();
-      
-      // Riabilita input e pulsante
-      if (elements.chatInput) {
-        elements.chatInput.disabled = false;
-        elements.chatInput.classList.remove('disabled');
-      }
-      
-      if (elements.sendButton) {
-        elements.sendButton.disabled = false;
-        elements.sendButton.classList.remove('disabled');
-      }
-      
-      // Nascondi l'indicatore di digitazione
-      hideTypingIndicator();
-      isSubmitting = false;
-      scrollToBottom();
-    }
-  }
-  
-  /**
-   * Gestisce la richiesta tradizionale (non streaming)
-   */
-  async function handleTraditionalRequest(userInput) {
-    try {
-      // Invia il messaggio al server
-      const response = await fetch('/api/conversation/message', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': elements.csrfToken.value
-        },
-        body: JSON.stringify({ message: userInput })
+      // Invia il messaggio tramite socket
+      socket.emit('user_message', {
+        message: userInput,
+        language: currentLang
       });
       
-      if (!response.ok) {
-        throw new Error('Errore nella comunicazione con il server');
-      }
+      log(`Messaggio utente inviato: ${userInput.substring(0, 30)}${userInput.length > 30 ? '...' : ''}`);
       
-      const data = await response.json();
+      // Il messaggio e la risposta dell'assistente verranno gestiti tramite 
+      // gli eventi 'assistant_chunk' e 'conversation_updated'
       
-      // Aggiunta della risposta all'interfaccia
-      addAssistantMessage(data.message);
-      
-      // Aggiornamento dei dati della conversazione
-      conversationState.messages.push({ role: 'assistant', content: data.message });
-      conversationState.conversationStep = data.conversationStep || conversationState.conversationStep;
-      conversationState.isActive = data.isActive;
-      
-      if (data.collectedData) {
-        conversationState.collectedData = data.collectedData;
-      }
-      
-      // Se la conversazione è terminata, mostra il pulsante di conferma
-      if (!data.isActive && data.collectedData) {
-        addConfirmationButton();
-      }
-      
-      // Non salviamo più lo stato durante la conversazione
-      
-      // Aggiornamento debug panel
-      updateDebugPanel();
-      
-      // Reset del contatore di tentativi
-      retryCount = 0;
+      // L'indicatore di digitazione e la riabilitazione degli input verranno gestiti
+      // nell'evento 'assistant_chunk' quando isComplete=true
       
       // Traccia evento
       trackEvent('message_sent');
     } catch (error) {
-      console.error('Errore nella comunicazione con il server:', error);
+      console.error('Errore nell\'invio del messaggio:', error);
       handleCommunicationError();
-    } finally {
-      // Nascondi l'indicatore di digitazione
-      hideTypingIndicator();
-      isSubmitting = false;
       
       // Riabilita input e pulsante
       if (elements.chatInput) {
         elements.chatInput.disabled = false;
         elements.chatInput.classList.remove('disabled');
-        elements.chatInput.focus();
       }
       
       if (elements.sendButton) {
@@ -854,6 +814,9 @@
         elements.sendButton.classList.remove('disabled');
       }
       
+      // Nascondi l'indicatore di digitazione
+      hideTypingIndicator();
+      isSubmitting = false;
       scrollToBottom();
     }
   }
@@ -926,7 +889,8 @@
         }
       };
       
-      // Invio dei dati
+      // Usiamo ancora fetch per l'invio finale, perché è un'operazione una tantum
+      // che non richiede la reattività di WebSocket
       const response = await fetch('/api/submit', {
         method: 'POST',
         headers: {
@@ -1235,22 +1199,28 @@
     if (document.visibilityState === 'visible') {
       // Reset del timer quando la pagina torna visibile
       resetInactivityTimer();
-    } else if (document.visibilityState === 'hidden') {
-      // Quando la pagina diventa invisibile, considera di chiudere le connessioni aperte
-      if (pendingStreamConnection && pendingStreamConnection.readyState !== 2) {
-        console.log("Pagina nascosta, mantengo la connessione aperta ma imposto un timeout");
-        // Impostiamo un timeout più breve per chiudere le connessioni se la pagina resta nascosta
-        setTimeout(() => {
-          if (document.visibilityState === 'hidden' && 
-              pendingStreamConnection && 
-              pendingStreamConnection.readyState !== 2) {
-            console.log("Chiusura connessione dopo periodo di inattività con pagina nascosta");
-            pendingStreamConnection.close();
-            pendingStreamConnection = null;
-            currentStreamId = null;
-          }
-        }, 60000); // 1 minuto con pagina nascosta
+      
+      // Se il socket è disconnesso, tenta la riconnessione
+      if (socket && !socketConnected) {
+        log('Pagina tornata visibile, tentativo di riconnessione del socket');
+        socket.connect();
       }
+    } else if (document.visibilityState === 'hidden') {
+      log('Pagina nascosta, mantenimento socket WebSocket');
+      
+      // Con WebSocket, manteniamo la connessione attiva anche con pagina nascosta
+      // per evitare problemi di riconnessione, soprattutto su mobile
+      
+      // Impostiamo solo un timer lungo per risparmiare batteria se la pagina resta nascosta molto tempo
+      setTimeout(() => {
+        if (document.visibilityState === 'hidden') {
+          log('Pagina nascosta per periodo prolungato, disconnessione socket per risparmiare risorse');
+          // Non chiudiamo la connessione ma mettiamo in attesa
+          if (socket && socketConnected) {
+            socket.disconnect();
+          }
+        }
+      }, 15 * 60 * 1000); // 15 minuti con pagina nascosta
     }
   }
 
@@ -1258,14 +1228,6 @@
    * Nuova conversazione
    */
   function startNewConversation() {
-    // Chiudi eventuali connessioni streaming attive
-    if (pendingStreamConnection && pendingStreamConnection.readyState !== 2) {
-      console.log("Chiusura connessione streaming per nuova conversazione");
-      pendingStreamConnection.close();
-      pendingStreamConnection = null;
-      currentStreamId = null;
-    }
-    
     // Reset degli elementi UI
     if (elements.chatMessages) {
       elements.chatMessages.innerHTML = '';
@@ -1296,8 +1258,25 @@
       console.warn('Impossibile rimuovere lo stato da localStorage:', e);
     }
     
-    // Avvio nuova conversazione
-    startConversation();
+    // Verifica che il socket sia connesso
+    if (!socket || !socketConnected) {
+      log('Socket non connesso, riconnessione prima di avviare nuova conversazione');
+      initSocketConnection();
+      
+      // Aggiungiamo un listener temporaneo per avviare la conversazione dopo la connessione
+      const onConnect = () => {
+        socket.off('connect', onConnect);
+        // Avvia conversazione dopo un breve delay per assicurarsi che l'autenticazione sia completa
+        setTimeout(() => {
+          startConversation();
+        }, 500);
+      };
+      
+      socket.on('connect', onConnect);
+    } else {
+      // Avvio nuova conversazione
+      startConversation();
+    }
   }
 
   /**

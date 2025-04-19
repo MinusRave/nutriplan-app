@@ -48,6 +48,9 @@
   </script>
   <% } %>
   
+  <!-- Socket.io -->
+  <script src="/socket.io/socket.io.js"></script>
+  
   <!-- Variabili globali -->
   <script>
     window.clientInfo = <%- JSON.stringify(clientInfo) %>;
@@ -62,7 +65,8 @@
       messages: {
         timeout: "<%= t('messages.timeout') %>",
         retry: "<%= t('messages.retry') %>",
-        confirmation: "<%= t('messages.confirmation') %>"
+        confirmation: "<%= t('messages.confirmation') %>",
+        typing: "<%= t('messages.typing') %>"
       }
     };
   </script>
@@ -104,6 +108,14 @@
   </header>
 
   <main class="container">
+    <!-- Connection Status -->
+    <div id="connection-status" class="hidden">
+      <div class="alert alert-warning">
+        <span id="connection-message"><%= t('messages.connecting') %></span>
+        <button id="reconnect-button" class="btn btn-sm btn-primary"><%= t('messages.reconnect') %></button>
+      </div>
+    </div>
+    
     <!-- Chat Interface -->
     <div id="chat-container" aria-live="polite" aria-relevant="additions">
       <div id="chat-messages" tabindex="0" role="log" aria-label="<%= t('chat.conversation') %>">
@@ -156,6 +168,10 @@
         <label for="debug-toggle">Enable Debug Mode</label>
       </div>
       <div id="debug-content" class="hidden">
+        <div class="debug-section">
+          <h4>Socket Status</h4>
+          <div id="socket-status">Socket: Disconnected</div>
+        </div>
         <div class="debug-section">
           <h4>Client Info</h4>
           <pre id="client-info"><%= JSON.stringify(clientInfo, null, 2) %></pre>

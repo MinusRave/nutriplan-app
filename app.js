@@ -14,7 +14,9 @@ const UAParser = require('ua-parser-js');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const axios = require('axios');
-const { v4: uuidv4 } = require('uuid'); // Aggiungi dipendenza per generare ID univoci
+const { v4: uuidv4 } = require('uuid');
+const http = require('http');
+const socketIo = require('socket.io');
 
 // Configurazione Anthropic (Claude)
 const anthropic = new Anthropic({
@@ -35,7 +37,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https://www.facebook.com", "https://connect.facebook.net"],
-      connectSrc: ["'self'", "https://www.google-analytics.com", "https://region1.google-analytics.com", "https://connect.facebook.net"]
+      connectSrc: ["'self'", "https://www.google-analytics.com", "https://region1.google-analytics.com", "https://connect.facebook.net", "wss://*", "ws://*"] // Aggiunto supporto per WebSockets
     }
   },
   // Impostazione del flag HttpOnly per i cookie
@@ -155,168 +157,62 @@ app.use((req, res, next) => {
 
 // Map per memorizzare le conversazioni attive
 const conversations = new Map();
-// Map per memorizzare le connessioni streaming attive
-const activeStreamConnections = new Map();
 
 /**
  * Classe per gestire una conversazione con Claude
  */
 class NutritionalConversation {
   constructor(language) {
-    this.id = uuidv4(); // Genera un ID univoco per ogni conversazione
     this.language = language || 'it';
     this.systemPrompt = this.getSystemPrompt();
     this.messages = [];
     this.claudeMessages = [];
     this.active = true;
-    this.collectedData = null;
-    this.lastInteraction = Date.now();
     this.conversationStep = 1;
-    this.activeStreams = new Set(); // Per tenere traccia delle connessioni di streaming attive
+    this.lastInteraction = Date.now();
+    this.collectedData = null;
+    this.id = uuidv4(); // Identificatore unico della conversazione
   }
-
+  
   /**
-   * Ottiene il prompt di sistema nella lingua corretta
+   * Ottiene il prompt di sistema in base alla lingua
    */
   getSystemPrompt() {
-    // Base del prompt in italiano
-    const basePrompt = `
-    # Istruzioni per Assistente Nutrizionale
+    // Prompt di sistema per la raccolta dati nutrizionali
+    return `
+    # Assistente Nutrizionale
 
-    Sei un assistente specializzato chiamato Joe, esperto in nutrizione, cordiale e professionale.
-    Il tuo compito è raccogliere informazioni per creare un piano alimentare personalizzato.
+    Sei Joe, un assistente nutrizionale esperto che aiuta a creare piani alimentari personalizzati. In questa conversazione, devi raccogliere informazioni dettagliate sulle esigenze nutrizionali dell'utente.
+
+    ## Conversazione
+    La conversazione sarà strutturata nelle seguenti fasi:
+    1. Richiedi il nome utente
+    2. Raccolta dati demografici (età, genere, altezza, peso)
+    3. Raccolta livello di attività fisica (sedentario, moderatamente attivo, molto attivo)
+    4. Raccolta obiettivi di salute (perdita peso, mantenimento, massa muscolare, salute generale)
+    5. Raccolta informazioni su eventuali condizioni mediche o allergie
+    6. Raccolta preferenze alimentari e restrizioni
+    7. Raccolta informazioni su pasti e programma alimentare attuali
+    8. Richiesta email per invio del piano
     
-    ## Informazioni da raccogliere
-    Devi raccogliere tutte queste informazioni dall'utente:
-
-    1. Nome dell'utente
-       * Chiedi subito il nome dell'utente all'inizio e utilizzalo durante la conversazione
-
-    2. Dati personali di base:
-       * Età
-       * Genere
-       * Altezza (in cm) e peso (in kg)
-       * Livello di attività fisica (sedentario, moderatamente attivo, molto attivo)
-
-    3. Obiettivi specifici:
-       * Perdita di peso, mantenimento, aumento di massa muscolare
-       * Eventuali obiettivi di salute specifici
-
-    4. Condizioni mediche rilevanti:
-       * Patologie preesistenti (diabete, ipertensione, ecc.)
-       * Allergie o intolleranze alimentari
-       * Restrizioni dietetiche per motivi medici
-
-    5. Preferenze alimentari:
-       * Alimenti preferiti e non graditi
-       * Eventuali regimi alimentari seguiti (vegetariano, vegano, ecc.)
-       * Preferenze culturali o religiose legate all'alimentazione
-
-    6. Abitudini attuali:
-       * Numero di pasti giornalieri
-       * Orari dei pasti
-       * Abitudini di idratazione
-
-    ## Regole per la conversazione
-    - Sii amichevole ma conciso
-    - Utilizza il nome dell'utente per rendere la conversazione più personale
-    - Guida l'utente passo dopo passo
-    - Valida i dati (ad es. peso tra 30-300kg, età tra 1-120 anni, ecc.)
-    - Se un dato non è valido, chiedi gentilmente di fornirlo di nuovo
-    - Se l'utente fornisce già informazioni in una volta, usa quelle e chiedi solo le informazioni mancanti
-    - Quando hai raccolto tutte le informazioni, fornisci un riepilogo completo e chiedi all'utente di confermare
-    - Se conferma, chiedi l'email dove inviare il piano alimentare
-    - Valida bene l'email
-    - Dopo aver ottenuto l'email, concludi la conversazione con un messaggio di ringraziamento personalizzato con il nome
+    ## Comportamento
+    - Sii conciso per la massima semplicità di lettura anche su mobile ma amichevole
+    - Non inviare tutti i punti in una volta, procedi gradualmente
+    - Fai una domanda alla volta per non sovraccaricare l'utente
+    - Esprimi empatia verso situazioni di salute complesse
+    - Chiedi chiarimenti se le informazioni fornite sono incomplete o poco chiare
+    - Non dare consigli nutrizionali specifici in questa fase
+    - Adatta il tono in base alle risposte dell'utente
+    - Mantieni un tono professionale ma accessibile
     
-    ## Formato speciale per la conclusione
-    Quando hai raccolto tutti i dati validi, DEVI concludere il messaggio con questo tag: 
-    <DATI_COMPLETI>
-    {
-      "nome": "valore",
-      "datiPersonali": {
-        "nome" : valore
-        "eta": valore,
-        "genere": "valore",
-        "peso": valore,
-        "altezza": valore,
-        "livelloAttivita": "valore"
-      },
-      "obiettivi": {
-        "tipoObiettivo": "valore",
-        "obiettiviSalute": ["valore1", "valore2"] o []
-      },
-      "condizioniMediche": {
-        "patologie": ["valore1", "valore2"] o [],
-        "allergie": ["valore1", "valore2"] o [],
-        "restrizioniDietetiche": ["valore1", "valore2"] o []
-      },
-      "preferenzeAlimentari": {
-        "alimentiPreferiti": ["valore1", "valore2"] o [],
-        "alimentiNonGraditi": ["valore1", "valore2"] o [],
-        "regimeAlimentare": "valore",
-        "preferenzeCulturali": "valore" o null
-      },
-      "abitudiniAttuali": {
-        "numeroPasti": valore,
-        "orariPasti": ["valore1", "valore2", "valore3"] o [],
-        "abitudiniIdratazione": "valore"
-      },
-      "email": "valore"
-    }
-    </DATI_COMPLETI>
-    
-    Dopo questo tag, la conversazione è considerata conclusa.
-    `;
-
-    // Traduzioni disponibili (per ora solo inglese come esempio)
-    const translations = {
-      en: `
-      # Instructions for Nutritional Assistant
-
-      You are a specialized assistant named Joe, expert in nutrition, friendly and professional.
-      Your task is to collect information to create a personalized meal plan.
-      
-      ## Information to collect
-      You must collect all this information from the user:
-
-      1. User's name
-         * Ask for the user's name at the beginning and use it throughout the conversation
-
-      2. Basic personal data:
-         * Age
-         * Gender
-         * Height (in cm) and weight (in kg)
-         * Physical activity level (sedentary, moderately active, very active)
-
-      3. Specific goals:
-         * Weight loss, maintenance, muscle gain
-         * Any specific health goals
-
-      4. Relevant medical conditions:
-         * Pre-existing conditions (diabetes, hypertension, etc.)
-         * Food allergies or intolerances
-         * Dietary restrictions for medical reasons
-
-      5. Food preferences:
-         * Favorite and disliked foods
-         * Any dietary regimes followed (vegetarian, vegan, etc.)
-         * Cultural or religious preferences related to food
-
-      6. Current habits:
-         * Number of daily meals
-         * Meal times
-         * Hydration habits
-
-      ## Conversation rules
-      - Be friendly but concise
-      - Use the user's name to make the conversation more personal
-      - Guide the user step by step
-      - Validate the data (e.g. weight between 30-300kg, age between 1-120 years, etc.)
-      - If data is invalid, kindly ask for it again
-      - If the user already provides information at once, use it and only ask for missing information
-      - When you have collected all the information, provide a complete summary and ask the user to confirm
-      - If confirmed, ask for the email where to send the meal plan
+    ## Logica della conversazione
+    - Conferma e ripeti le informazioni importanti
+    - Non saltare passaggi
+    - Segui una progressione logica
+    - Adatta le domande successive in base alle risposte precedenti
+    - Per preferenze alimentari, chiedi cibi preferiti e non graditi
+    - Per condizioni mediche, sii specifico (diabete, celiachia, ipertensione, etc.)
+    - Per l'email, richiedi un indirizzo valido
       - Validate the email carefully
       - After obtaining the email, conclude the conversation with a personalized thank you message using their name
       
@@ -347,95 +243,45 @@ class NutritionalConversation {
           "regimeAlimentare": "value",
           "preferenzeCulturali": "value" or null
         },
-        "abitudiniAttuali": {
-          "numeroPasti": value,
-          "orariPasti": ["value1", "value2", "value3"] or [],
-          "abitudiniIdratazione": "value"
+        "abitudini": {
+          "pastiGiornalieri": value,
+          "orariPasti": ["value1", "value2"] or [],
+          "snack": boolean
         },
         "email": "value"
       }
       </DATI_COMPLETI>
-      
-      After this tag, the conversation is considered concluded.
-      `
-      // Qui si potrebbero aggiungere altre traduzioni (fr, es, de, pt)
-    };
 
-    // Restituisci il prompt nella lingua corretta o quello italiano come fallback
-    return translations[this.language] || basePrompt;
+      This tag will not be shown to the user but will be processed by our system. Make sure all data is collected and validated before sending this tag. The only message to the user should be a thank you and confirmation.
+    `;
   }
-
+  
   /**
-   * Aggiunge un messaggio alla conversazione
-   * @param {string} content - Il messaggio dell'utente
-   * @param {function} streamCallback - Callback opzionale per lo streaming della risposta
-   * @param {string} requestId - ID univoco della richiesta per evitare duplicazioni
+   * Aggiunge un messaggio alla conversazione e ottiene la risposta di Claude
+   * @param {string} content - Contenuto del messaggio utente
+   * @param {function} progressCallback - Callback per lo streaming
+   * @returns {Promise<object>} Risposta con il messaggio e lo stato
    */
-  async addMessage(content, streamCallback = null, requestId = null) {
-    // Aggiorna timestamp ultima interazione
-    this.lastInteraction = Date.now();
-
-    // Aggiungi messaggio dell'utente
+  async addMessage(content, progressCallback = null) {
     this.messages.push({
       role: 'user',
-      content: content
+      content
     });
-
+    
+    this.lastInteraction = Date.now();
+    
     // Prepara i messaggi per Claude
-    const messagesForClaude = [
-      ...this.claudeMessages,
-      { role: 'user', content: content }
-    ];
-
+    const messagesForClaude = [...this.claudeMessages];
+    
+    // Aggiungi il nuovo messaggio utente
+    messagesForClaude.push({
+      role: 'user',
+      content
+    });
+    
     try {
-      let responseContent = '';
-      let isStreaming = !!streamCallback;
-
-      if (isStreaming) {
-        // Se è fornito un requestId, memorizziamo la connessione
-        if (requestId) {
-          // Registriamo la nuova stream e chiudiamo eventuali stream precedenti
-          if (this.activeStreams.size > 0) {
-            console.log(`Chiusura di ${this.activeStreams.size} connessioni streaming precedenti per conversazione ${this.id}`);
-            
-            // Crea una copia dell'insieme per evitare problemi durante l'iterazione
-            const previousStreamIds = [...this.activeStreams];
-            
-            // Chiudi ogni connessione precedente
-            for (const streamId of previousStreamIds) {
-              // Recupera e chiudi la connessione dal registro globale
-              const previousConnection = activeStreamConnections.get(streamId);
-              if (previousConnection && previousConnection.res && !previousConnection.res.finished) {
-                console.log(`Chiusura connessione streaming: ${streamId}`);
-                try {
-                  // Invia un messaggio di chiusura
-                  previousConnection.res.write(`data: {"isComplete":true,"forceClose":true}\n\n`);
-                  previousConnection.res.end();
-                } catch (e) {
-                  console.error(`Errore nella chiusura della connessione: ${e.message}`);
-                }
-                
-                // Rimuovi dal registro delle connessioni attive
-                activeStreamConnections.delete(streamId);
-              }
-              
-              // Rimuovi dall'insieme delle stream attive per questa conversazione
-              this.activeStreams.delete(streamId);
-            }
-          }
-          
-          // Registra la nuova connessione
-          this.activeStreams.add(requestId);
-          activeStreamConnections.set(requestId, { 
-            res: streamCallback.res, 
-            timestamp: Date.now(),
-            conversationId: this.id
-          });
-          
-          console.log(`Registrata nuova connessione streaming: ${requestId} per conversazione ${this.id}`);
-        }
-        
-        // Streaming call
+      if (progressCallback) {
+        // Approccio STREAMING usando il nuovo client API
         const stream = await anthropic.messages.stream({
           model: 'claude-3-7-sonnet-20250219',
           system: this.systemPrompt,
@@ -443,58 +289,45 @@ class NutritionalConversation {
           max_tokens: 1500,
           temperature: 0.7
         });
-
-        // Initialize a buffer to collect the chunks
-        let fullContent = '';
         
-        // Process each chunk as it arrives
+        let fullContent = '';
+        let contentComplete = false;
+        
         for await (const chunk of stream) {
-          if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+          if (chunk.type === 'content_block_delta') {
             const chunkText = chunk.delta.text;
             fullContent += chunkText;
             
-            // Send each chunk to the client in real-time
-            if (streamCallback) {
-              // Verifica se la connessione è ancora attiva prima di inviare
-              if (this.activeStreams.has(requestId)) {
-                const streamData = {
-                  chunk: chunkText,
-                  fullContent,
-                  isComplete: false,
-                  conversationStep: this.conversationStep,
-                  requestId: requestId
-                };
-                
-                streamCallback(streamData);
-              } else {
-                console.log(`Connessione ${requestId} non più attiva, interruzione streaming`);
-                break;
-              }
-            }
+            // Chiama il callback con l'aggiornamento
+            progressCallback({
+              chunk: chunkText,
+              fullContent,
+              isComplete: false,
+              conversationStep: this.conversationStep
+            });
+          }
+          
+          if (chunk.type === 'message_delta' && chunk.delta.stop_reason) {
+            contentComplete = true;
           }
         }
         
-        // Get the full response
-        responseContent = fullContent;
+        // Chiama il callback una volta completo
+        progressCallback({
+          chunk: '',
+          fullContent,
+          isComplete: true,
+          conversationStep: this.conversationStep
+        });
         
-        // Final update with complete flag
-        if (streamCallback && this.activeStreams.has(requestId)) {
-          const finalData = {
-            chunk: '',
-            fullContent: responseContent,
-            isComplete: true,
-            conversationStep: this.conversationStep,
-            requestId: requestId
-          };
-          
-          streamCallback(finalData);
-          
-          // Dopo l'invio del messaggio finale, rimuovi la connessione
-          this.activeStreams.delete(requestId);
-          activeStreamConnections.delete(requestId);
-        }
+        // Elabora la risposta
+        const assistantMessage = { role: 'assistant', content: fullContent };
+        this.messages.push(assistantMessage);
+        this.claudeMessages.push(assistantMessage);
+        this.processResponseInfo(fullContent);
+        
       } else {
-        // Non-streaming call (fallback)
+        // Approccio NON-STREAMING
         const response = await anthropic.messages.create({
           model: 'claude-3-7-sonnet-20250219',
           system: this.systemPrompt,
@@ -502,104 +335,57 @@ class NutritionalConversation {
           max_tokens: 1500,
           temperature: 0.7
         });
-
-        responseContent = response.content[0].text;
-      }
-
-      // Aggiungi la risposta alla cronologia
-      this.messages.push({
-        role: 'assistant',
-        content: responseContent
-      });
-
-      this.claudeMessages.push(
-        { role: 'user', content: content },
-        { role: 'assistant', content: responseContent }
-      );
-
-      // Aggiorna lo stato della conversazione
-      this.updateConversationState(responseContent);
-
-      // Controlla se è presente il tag di completamento
-      if (responseContent.includes('<DATI_COMPLETI>')) {
-        this.active = false;
         
-        // Estrai i dati JSON dal tag
-        try {
-          const regex = /<DATI_COMPLETI>([\s\S]*?)<\/DATI_COMPLETI>/;
-          const match = responseContent.match(regex);
-          
-          if (match && match[1]) {
-            this.collectedData = JSON.parse(match[1].trim());
-          }
-        } catch (error) {
-          console.error('Errore nell\'estrazione dei dati:', error);
-        }
+        const assistantMessage = { role: 'assistant', content: response.content[0].text };
+        
+        // Aggiorna i messaggi della conversazione
+        this.messages.push(assistantMessage);
+        this.claudeMessages.push(assistantMessage);
+        
+        // Elabora la risposta
+        this.processResponseInfo(assistantMessage.content);
+        
+        return {
+          content: assistantMessage.content,
+          conversationStep: this.conversationStep,
+          isActive: this.active,
+          collectedData: this.collectedData
+        };
       }
-
-      return {
-        content: responseContent,
-        isActive: this.active,
-        collectedData: this.collectedData,
-        conversationStep: this.conversationStep
-      };
     } catch (error) {
       console.error('Errore nella chiamata a Claude:', error);
       throw error;
     }
   }
-
+  
   /**
-   * Aggiorna lo stato della conversazione in base alla risposta
+   * Elabora le informazioni dalla risposta
+   * @param {string} content - Contenuto della risposta
    */
-  updateConversationState(response) {
-    // Step 1: Benvenuto (già impostato all'inizio)
+  processResponseInfo(content) {
+    // Aggiorna lo step della conversazione
+    this.conversationStep = Math.min(this.conversationStep + 1, 8);
     
-    // Step 2: Nome e Dati personali
-    if (response.includes('nome') || response.includes('mi chiamo') || 
-        response.includes('eta') || response.includes('età') || 
-        response.includes('genere') || response.includes('peso') || 
-        response.includes('altezza') || response.includes('attività fisica')) {
-      this.conversationStep = Math.max(2, this.conversationStep);
-    }
-    
-    // Step 3: Obiettivi
-    else if (response.includes('obiettivi') || response.includes('perdita di peso') || 
-             response.includes('mantenimento') || response.includes('massa muscolare')) {
-      this.conversationStep = Math.max(3, this.conversationStep);
-    }
-    
-    // Step 4: Condizioni mediche
-    else if (response.includes('condizioni mediche') || response.includes('patologie') || 
-             response.includes('allergie') || response.includes('intolleranze')) {
-      this.conversationStep = Math.max(4, this.conversationStep);
-    }
-    
-    // Step 5: Preferenze alimentari
-    else if (response.includes('preferenze alimentari') || response.includes('alimenti preferiti') || 
-             response.includes('cibi graditi') || response.includes('regimi alimentari')) {
-      this.conversationStep = Math.max(5, this.conversationStep);
-    }
-    
-    // Step 6: Abitudini
-    else if (response.includes('abitudini') || response.includes('pasti giornalieri') || 
-             response.includes('orari dei pasti') || response.includes('idratazione')) {
-      this.conversationStep = Math.max(6, this.conversationStep);
-    }
-    
-    // Step 7: Email
-    else if (response.includes('email') || response.includes('indirizzo email') || 
-             response.includes('contatto')) {
-      this.conversationStep = Math.max(7, this.conversationStep);
-    }
-    
-    // Step 8: Riepilogo
-    else if (response.includes('riepilogo') || response.includes('riassunto') || 
-             response.includes('confermare')) {
-      this.conversationStep = Math.max(8, this.conversationStep);
+    // Estrai i dati raccolti se presenti
+    if (content.includes('<DATI_COMPLETI>')) {
+      try {
+        const regex = /<DATI_COMPLETI>([\s\S]*?)<\/DATI_COMPLETI>/;
+        const match = content.match(regex);
+        
+        if (match && match[1]) {
+          this.collectedData = JSON.parse(match[1].trim());
+          this.active = false;
+          console.log(`Dati raccolti per conversazione ${this.id}`);
+          
+          // Aggiorna step al massimo quando la conversazione è completata
+          this.conversationStep = Math.max(8, this.conversationStep);
+        }
+      } catch (error) {
+        console.error('Errore nell\'estrazione dei dati:', error);
+      }
     }
   }
-
+  
   /**
    * Ottiene lo stato attuale della conversazione
    */
@@ -618,38 +404,9 @@ class NutritionalConversation {
           };
         }
         return msg;
-      })
+      }),
+      conversationId: this.id
     };
-  }
-  
-  /**
-   * Chiude tutte le connessioni di streaming attive per questa conversazione
-   */
-  closeAllStreams() {
-    if (this.activeStreams.size > 0) {
-      console.log(`Chiusura di ${this.activeStreams.size} connessioni streaming per conversazione ${this.id}`);
-      
-      // Crea una copia per evitare problemi durante l'iterazione
-      const streamIds = [...this.activeStreams];
-      
-      // Chiudi ogni connessione
-      for (const streamId of streamIds) {
-        const connection = activeStreamConnections.get(streamId);
-        if (connection && connection.res && !connection.res.finished) {
-          try {
-            connection.res.write(`data: {"isComplete":true,"forceClose":true}\n\n`);
-            connection.res.end();
-          } catch (e) {
-            console.error(`Errore nella chiusura della connessione: ${e.message}`);
-          }
-          
-          // Rimuovi dai registri
-          activeStreamConnections.delete(streamId);
-        }
-        
-        this.activeStreams.delete(streamId);
-      }
-    }
   }
 }
 
@@ -662,7 +419,7 @@ app.get('/health', (req, res) => {
 
 // Home page
 app.get('/', csrfProtection, (req, res) => {
-  res.render('index', { 
+  res.render('index-modern', { 
     csrfToken: req.csrfToken(),
     clientInfo: req.clientInfo,
     currentLang: req.language
@@ -744,288 +501,21 @@ app.get('/contact', (req, res) => {
 });
 
 // Cambio lingua
-app.get('/changelanguage/:lng', (req, res) => {
-  const supportedLangs = ['it', 'en', 'fr', 'es', 'de', 'pt'];
-  const lng = req.params.lng;
-  const redirect = req.query.redirect || '/';
+app.get('/changelanguage/:lang', (req, res) => {
+  const lang = req.params.lang;
+  const redirectUrl = req.query.redirect || '/';
   
-  if (supportedLangs.includes(lng)) {
-    res.cookie('i18next', lng);
-    req.language = lng;
-  }
-  
-  res.redirect(redirect);
-});
-
-// API: Inizia una nuova conversazione
-app.post('/api/conversation/start', apiLimiter, csrfProtection, (req, res) => {
-  try {
-    const sessionId = req.session.id;
-    const language = req.language || 'it';
-    
-    // Verifica se esiste già una conversazione per questa sessione
-    let conversation = conversations.get(sessionId);
-    
-    // Se la conversazione esiste, chiudi tutte le connessioni streaming aperte
-    if (conversation) {
-      conversation.closeAllStreams();
-    }
-    
-    // Crea una nuova conversazione
-    conversation = new NutritionalConversation(language);
-    
-    // Salvala nella mappa
-    conversations.set(sessionId, conversation);
-    
-    // Prepara il messaggio di benvenuto (specifico per lingua)
-    let welcomeMessage;
-    
-    switch(language) {
-      case 'en':
-        welcomeMessage = "Hi! I'm Joe, your nutrition assistant. I'll help you create a personalized meal plan. What's your name?";
-        break;
-      case 'fr':
-        welcomeMessage = "Bonjour ! Je suis Joe, votre assistant nutritionnel. Je vais vous aider à créer un plan alimentaire personnalisé. Comment vous appelez-vous ?";
-        break;
-      case 'es':
-        welcomeMessage = "¡Hola! Soy Joe, tu asistente nutricional. Te ayudaré a crear un plan de alimentación personalizado. ¿Cómo te llamas?";
-        break;
-      case 'de':
-        welcomeMessage = "Hallo! Ich bin Joe, Ihr Ernährungsassistent. Ich helfe Ihnen, einen persönlichen Ernährungsplan zu erstellen. Wie heißen Sie?";
-        break;
-      case 'pt':
-        welcomeMessage = "Olá! Sou o Joe, seu assistente nutricional. Vou ajudá-lo a criar um plano alimentar personalizado. Qual é o seu nome?";
-        break;
-      default:
-        welcomeMessage = "Ciao! Sono Joe, il tuo assistente nutrizionale. Ti aiuterò a creare un piano alimentare personalizzato. Come ti chiami?";
-    }
-    
-    // Aggiungi il messaggio di benvenuto
-    conversation.messages.push({
-      role: 'assistant',
-      content: welcomeMessage
-    });
-    
-    // Salva l'ID univoco della conversazione nella risposta
-    res.json({
-      conversationId: sessionId,
-      message: welcomeMessage,
-      conversationStep: 1,
-      conversationUUID: conversation.id
-    });
-  } catch (error) {
-    console.error('Errore nell\'avvio della conversazione:', error);
-    res.status(500).json({ 
-      error: req.t('error.generic'),
-      details: process.env.NODE_ENV === 'development' ? error.message : null
-    });
-  }
-});
-
-// API: Invia un messaggio alla conversazione
-app.post('/api/conversation/message', apiLimiter, csrfProtection, async (req, res) => {
-  try {
-    const { message, stream } = req.body;
-    const sessionId = req.session.id;
-    
-    if (!message) {
-      return res.status(400).json({ error: req.t('error.invalidMessage') });
-    }
-    
-    // Ottieni la conversazione corrente o creane una nuova
-    let conversation = conversations.get(sessionId);
-    if (!conversation) {
-      conversation = new NutritionalConversation(req.language);
-      conversations.set(sessionId, conversation);
-    }
-    
-    // Determina se usare streaming in base al parametro nella richiesta
-    const useStreaming = stream === true;
-    
-    if (useStreaming) {
-      // Genera un ID univoco per questa richiesta di streaming
-      const requestId = `${sessionId}-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-      console.log(`Nuova richiesta di streaming: ${requestId} per conversazione ${conversation.id}`);
-      
-      // Set headers for SSE
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.setHeader('X-Accel-Buffering', 'no'); // Important for NGINX proxying
-      res.setHeader('Access-Control-Allow-Origin', '*'); // Allow cross-origin requests
-      res.flushHeaders(); // Immediately send headers
-      
-      // Crea un timeout per la risposta
-      const responseTimeout = setTimeout(() => {
-        console.warn(`Timeout per richiesta streaming ${requestId}`);
-        
-        // Invia un messaggio di errore al client
-        const errorData = JSON.stringify({
-          error: 'Timeout nella generazione della risposta',
-          isComplete: true
-        });
-        
-        res.write(`data: ${errorData}\n\n`);
-        res.end();
-        
-        // Rimuovi dai registri
-        conversation.activeStreams.delete(requestId);
-        activeStreamConnections.delete(requestId);
-      }, 60000); // 60 secondi
-      
-      // Streaming callback function
-      const sendStreamChunk = (data) => {
-        const { chunk, fullContent, isComplete, conversationStep, requestId: streamRequestId } = data;
-        
-        // Verifica che la risposta sia ancora aperta e non conclusa
-        if (res.finished) {
-          console.log(`Risposta già conclusa per ${streamRequestId}, ignoro il chunk`);
-          return;
-        }
-        
-        // Prepare visible content (remove DATI_COMPLETI tag if present)
-        let visibleContent = fullContent;
-        let collectedData = null;
-        let isActive = true;
-        
-        if (visibleContent.includes('<DATI_COMPLETI>')) {
-          visibleContent = visibleContent.replace(/<DATI_COMPLETI>[\s\S]*?<\/DATI_COMPLETI>/g, '').trim();
-          isActive = false;
-          
-          // Extract collected data if this is the final chunk
-          if (isComplete) {
-            try {
-              const regex = /<DATI_COMPLETI>([\s\S]*?)<\/DATI_COMPLETI>/;
-              const match = fullContent.match(regex);
-              
-              if (match && match[1]) {
-                collectedData = JSON.parse(match[1].trim());
-              }
-            } catch (error) {
-              console.error('Errore nell\'estrazione dei dati:', error);
-            }
-          }
-        }
-        
-        // Send the chunk as an event - proper SSE format
-        const eventData = JSON.stringify({
-          requestId: streamRequestId,
-          chunk,
-          message: visibleContent,
-          isComplete,
-          conversationStep,
-          isActive,
-          ...(collectedData && { collectedData })
-        });
-        
-        res.write(`data: ${eventData}\n\n`);
-        
-        // Add debug logging for final message
-        if (isComplete) {
-          console.log(`Invio messaggio finale: isComplete=${isComplete}, conversationStep=${conversationStep}, isActive=${isActive}, hasData=${!!collectedData}`);
-          
-          // Pulisci il timeout
-          clearTimeout(responseTimeout);
-          
-          // Chiudi la risposta SSE
-          res.end();
-          
-          // Rimuovi la connessione dai registri
-          conversation.activeStreams.delete(requestId);
-          activeStreamConnections.delete(requestId);
-        }
-        
-        // Force flush to ensure chunk is sent immediately
-        res.flush && res.flush();
-      };
-      
-      // Memorizza una reference alla risposta per poterla chiudere se necessario
-      sendStreamChunk.res = res;
-      
-      try {
-        // Start the streaming conversation
-        await conversation.addMessage(message, sendStreamChunk, requestId);
-      } catch (error) {
-        console.error(`Errore durante lo streaming per ${requestId}:`, error);
-        
-        // Invia un messaggio di errore al client
-        if (!res.finished) {
-          const errorData = JSON.stringify({
-            error: 'Errore nella generazione della risposta',
-            errorMessage: process.env.NODE_ENV === 'development' ? error.message : null,
-            isComplete: true
-          });
-          
-          res.write(`data: ${errorData}\n\n`);
-          res.end();
-        }
-        
-        // Rimuovi dai registri
-        clearTimeout(responseTimeout);
-        conversation.activeStreams.delete(requestId);
-        activeStreamConnections.delete(requestId);
-      }
-    } else {
-      // Non-streaming response (traditional API)
-      const response = await conversation.addMessage(message);
-      
-      // Estrai solo il contenuto visibile all'utente (senza il tag DATI_COMPLETI)
-      let visibleContent = response.content;
-      if (!response.isActive) {
-        visibleContent = visibleContent.replace(/<DATI_COMPLETI>[\s\S]*?<\/DATI_COMPLETI>/g, '').trim();
-      }
-      
-      res.json({
-        message: visibleContent,
-        conversationStep: response.conversationStep,
-        isActive: response.isActive,
-        ...(response.collectedData && { collectedData: response.collectedData })
-      });
-    }
-  } catch (error) {
-    console.error('Errore nella comunicazione con Claude:', error);
-    res.status(500).json({ 
-      error: req.t('error.connectionError'),
-      details: process.env.NODE_ENV === 'development' ? error.message : null
-    });
-  }
-});
-
-// API: Ottieni stato conversazione
-app.get('/api/conversation/state', csrfProtection, (req, res) => {
-  const sessionId = req.session.id;
-  const conversation = conversations.get(sessionId);
-  const isMobile = req.clientInfo.isMobile;
-  
-  console.log(`Richiesta stato conversazione da ${isMobile ? 'mobile' : 'desktop'}, sessionId: ${sessionId.substring(0, 8)}...`);
-  
-  // Ripristiniamo qualsiasi conversazione esistente, anche se incompleta
-  if (!conversation) {
-    console.log(`Conversazione non trovata per sessione ${sessionId.substring(0, 8)}. Iniziando nuova conversazione.`);
-    return res.json({
-      exists: false,
-      isActive: true,
-      conversationStep: 0,
-      messages: []
+  // Verifica che la lingua richiesta sia supportata
+  if (i18next.languages.includes(lang)) {
+    res.cookie('i18next', lang, { 
+      maxAge: 1000 * 60 * 60 * 24 * 365, 
+      httpOnly: true,
+      secure: isSecure(),
+      sameSite: 'lax'
     });
   }
   
-  // Ripristiniamo la conversazione corrente
-  const state = conversation.getState();
-  
-  // Aggiungiamo informazioni di debug
-  console.log(`Ripristino conversazione: ${state.messages.length} messaggi, step: ${state.conversationStep}`);
-  
-  res.json({
-    exists: true,
-    ...state,
-    conversationUUID: conversation.id,
-    _debug: {
-      sessionId: sessionId.substring(0, 8),
-      isMobile: isMobile,
-      timestamp: new Date().toISOString()
-    }
-  });
+  res.redirect(redirectUrl);
 });
 
 // API: Endpoint per l'invio dei dati finali
@@ -1037,26 +527,24 @@ app.post('/api/submit', apiLimiter, csrfProtection, [
   // Validazione
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+    return res.status(400).json({ 
+      error: req.t('submission.validation'),
+      details: errors.array() 
+    });
   }
   
   try {
     const { userData, conversationData } = req.body;
-    const sessionId = req.session.id;
+    const conversationId = req.session.id;
     
-    // Recupera la conversazione
-    const conversation = conversations.get(sessionId);
+    console.log(`Dati inviati per sessione ${conversationId}`);
     
-    if (conversation) {
-      // Chiudi tutte le connessioni streaming attive
-      conversation.closeAllStreams();
-    }
-    
-    // Preparazione del payload
+    // Preparazione del payload per l'endpoint esterno
     const payload = {
       userData,
-      conversationData,
-      sessionInfo: {
+      metadata: {
+        submittedAt: new Date().toISOString(),
+        clientInfo: req.clientInfo,
         language: req.language,
         timestamp: new Date().toISOString(),
         clientInfo: req.clientInfo
@@ -1084,7 +572,10 @@ app.post('/api/submit', apiLimiter, csrfProtection, [
     }
     
     // Reset della conversazione
-    conversations.delete(sessionId);
+    const conversation = conversations.get(conversationId);
+    if (conversation) {
+      conversations.delete(conversationId);
+    }
     
     res.json({ success: true, message: req.t('submission.success') });
   } catch (error) {
@@ -1096,59 +587,202 @@ app.post('/api/submit', apiLimiter, csrfProtection, [
   }
 });
 
-// Pulizia delle conversazioni inattive e delle connessioni streaming
+// Pulizia delle conversazioni inattive
 setInterval(() => {
   const now = Date.now();
   const INACTIVE_THRESHOLD = 3 * 24 * 60 * 60 * 1000; // 3 giorni
-  const STREAM_TIMEOUT = 5 * 60 * 1000; // 5 minuti
   
-  // Pulizia connessioni streaming
-  for (const [id, connection] of activeStreamConnections.entries()) {
-    const streamAge = now - connection.timestamp;
-    if (streamAge > STREAM_TIMEOUT) {
-      console.log(`Chiusura connessione streaming ${id} per timeout`);
-      try {
-        if (connection.res && !connection.res.finished) {
-          connection.res.write(`data: {"isComplete":true,"forceClose":true,"reason":"timeout"}\n\n`);
-          connection.res.end();
-        }
-      } catch (e) {
-        console.error(`Errore nella chiusura della connessione: ${e.message}`);
-      }
-      
-      // Rimuovi dai registri
-      activeStreamConnections.delete(id);
-      
-      // Rimuovi anche dal registro della conversazione se esiste
-      if (connection.conversationId) {
-        const conversation = [...conversations.values()].find(c => c.id === connection.conversationId);
-        if (conversation) {
-          conversation.activeStreams.delete(id);
-        }
-      }
-    }
-  }
-  
-  // Pulizia conversazioni inattive
   for (const [id, conversation] of conversations.entries()) {
     const inactiveTime = now - conversation.lastInteraction;
     if (inactiveTime > INACTIVE_THRESHOLD) {
-      // Chiudi tutte le connessioni streaming
-      conversation.closeAllStreams();
-      
-      // Rimuovi la conversazione
       conversations.delete(id);
       console.log(`Conversazione ${id} rimossa per inattività`);
     }
   }
   
-  // Log statistiche
-  console.log(`Statistiche pulizia: ${conversations.size} conversazioni, ${activeStreamConnections.size} connessioni streaming`);
-}, 15 * 60 * 1000); // Controlla ogni 15 minuti
+  console.log(`Statistiche pulizia: ${conversations.size} conversazioni attive`);
+}, 60 * 60 * 1000); // Controlla ogni ora
+
+// Creazione del server HTTP per Socket.io
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: process.env.NODE_ENV === 'production' ? false : "*", // Abilita CORS in sviluppo
+    methods: ["GET", "POST"]
+  }
+});
+
+// Socket.io handling
+io.on('connection', (socket) => {
+  console.log(`Nuovo client connesso: ${socket.id}`);
+  
+  // Associa socket alla sessione utente
+  let sessionId = null;
+  
+  // Autenticazione con ID sessione
+  socket.on('authenticate', (data) => {
+    sessionId = data.sessionId;
+    console.log(`Socket ${socket.id} autenticato con sessionId: ${sessionId}`);
+    
+    // Invia lo stato iniziale della conversazione
+    const conversation = conversations.get(sessionId);
+    if (conversation) {
+      const state = conversation.getState();
+      socket.emit('conversation_state', {
+        exists: true,
+        ...state
+      });
+      console.log(`Stato conversazione inviato al client per sessione ${sessionId}`);
+    } else {
+      socket.emit('conversation_state', {
+        exists: false,
+        isActive: true,
+        conversationStep: 0,
+        messages: []
+      });
+      console.log(`Nessuna conversazione trovata per sessione ${sessionId}`);
+    }
+  });
+  
+  // Inizia una nuova conversazione
+  socket.on('start_conversation', (data) => {
+    if (!sessionId) {
+      console.error('Tentativo di iniziare conversazione senza autenticazione');
+      socket.emit('error', { message: 'Non autenticato' });
+      return;
+    }
+    
+    // Crea nuova conversazione
+    const language = data.language || 'it';
+    const conversation = new NutritionalConversation(language);
+    conversations.set(sessionId, conversation);
+    
+    // Aggiorna lo stato iniziale
+    const welcomeMessage = getWelcomeMessage(language);
+    conversation.messages.push({
+      role: 'assistant',
+      content: welcomeMessage
+    });
+    
+    // Invia messaggio di benvenuto
+    socket.emit('conversation_state', {
+      exists: true,
+      isActive: true,
+      conversationStep: 1,
+      messages: [{ role: 'assistant', content: welcomeMessage }],
+      conversationId: conversation.id
+    });
+    
+    console.log(`Nuova conversazione iniziata per sessione ${sessionId}`);
+  });
+  
+  // Gestione messaggi utente
+  socket.on('user_message', async (data) => {
+    try {
+      if (!sessionId) {
+        console.error('Tentativo di invio messaggio senza autenticazione');
+        socket.emit('error', { message: 'Non autenticato' });
+        return;
+      }
+      
+      console.log(`Ricevuto messaggio da ${sessionId}: ${data.message.substring(0, 30)}...`);
+      
+      // Ottieni o crea conversazione
+      let conversation = conversations.get(sessionId);
+      if (!conversation) {
+        conversation = new NutritionalConversation(data.language || 'it');
+        conversations.set(sessionId, conversation);
+        console.log(`Creata nuova conversazione per sessione ${sessionId}`);
+      }
+      
+      // Callback per i chunk di risposta in tempo reale
+      const sendChunk = (chunkData) => {
+        const { chunk, fullContent, isComplete, conversationStep } = chunkData;
+        
+        // Prepara contenuto visibile (rimuovi DATI_COMPLETI tag se presente)
+        let visibleContent = fullContent;
+        let collectedData = null;
+        let isActive = true;
+        
+        if (visibleContent.includes('<DATI_COMPLETI>')) {
+          visibleContent = visibleContent.replace(/<DATI_COMPLETI>[\s\S]*?<\/DATI_COMPLETI>/g, '').trim();
+          isActive = false;
+          
+          // Estrai dati raccolti se è l'ultimo chunk
+          if (isComplete) {
+            try {
+              const regex = /<DATI_COMPLETI>([\s\S]*?)<\/DATI_COMPLETI>/;
+              const match = fullContent.match(regex);
+              
+              if (match && match[1]) {
+                collectedData = JSON.parse(match[1].trim());
+              }
+            } catch (error) {
+              console.error('Errore nell\'estrazione dei dati:', error);
+            }
+          }
+        }
+        
+        // Invia chunk all'utente
+        socket.emit('assistant_chunk', {
+          chunk,
+          message: visibleContent,
+          isComplete,
+          conversationStep,
+          isActive,
+          ...(collectedData && { collectedData })
+        });
+        
+        // Log per chunk finale
+        if (isComplete) {
+          console.log(`Invio messaggio finale a ${sessionId}: isComplete=${isComplete}, conversationStep=${conversationStep}, isActive=${isActive}`);
+        }
+      };
+      
+      // Elabora il messaggio con Claude
+      await conversation.addMessage(data.message, sendChunk);
+      
+      // Invia lo stato aggiornato della conversazione
+      const state = conversation.getState();
+      socket.emit('conversation_updated', state);
+      console.log(`Stato conversazione aggiornato per ${sessionId}: ${state.messages.length} messaggi`);
+      
+    } catch (error) {
+      console.error('Errore nell\'elaborazione del messaggio:', error);
+      socket.emit('error', { 
+        message: 'Errore nell\'elaborazione del messaggio',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  });
+  
+  // Gestione disconnessione
+  socket.on('disconnect', () => {
+    console.log(`Client disconnesso: ${socket.id}, sessionId: ${sessionId || 'non autenticato'}`);
+  });
+});
+
+// Helper per ottenere il messaggio di benvenuto in base alla lingua
+function getWelcomeMessage(language) {
+  switch(language) {
+    case 'en':
+      return "Hi! I'm Joe, your nutrition assistant. I'll help you create a personalized meal plan. What's your name?";
+    case 'fr':
+      return "Bonjour ! Je suis Joe, votre assistant nutritionnel. Je vais vous aider à créer un plan alimentaire personnalisé. Comment vous appelez-vous ?";
+    case 'es':
+      return "¡Hola! Soy Joe, tu asistente nutricional. Te ayudaré a crear un plan de alimentación personalizado. ¿Cómo te llamas?";
+    case 'de':
+      return "Hallo! Ich bin Joe, Ihr Ernährungsassistent. Ich helfe Ihnen, einen persönlichen Ernährungsplan zu erstellen. Wie heißen Sie?";
+    case 'pt':
+      return "Olá! Sou o Joe, seu assistente nutricional. Vou ajudá-lo a criar um plano alimentar personalizado. Qual é o seu nome?";
+    default:
+      return "Ciao! Sono Joe, il tuo assistente nutrizionale. Ti aiuterò a creare un piano alimentare personalizzato. Come ti chiami?";
+  }
+}
 
 // Avvio del server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server in esecuzione sulla porta ${PORT}`);
   console.log(`App disponibile all'indirizzo: http://localhost:${PORT}`);
 });
