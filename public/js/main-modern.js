@@ -1,4 +1,4 @@
-// main-ultra-minimal.js - Script client per versione ultra-minimalista
+// main-modern.js - Improved script with mobile optimizations
 (function() {
     'use strict';
     
@@ -38,8 +38,9 @@
       STORAGE_KEY: 'dietingwithjoeConversationState',
       // Debug mode
       DEBUG: DEBUG,
-      // Rilevazione mobile
-      IS_MOBILE: /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent.toLowerCase())
+      // Rilevazione mobile (migliore rilevamento, include tablet)
+      IS_MOBILE: /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                (('ontouchstart' in window) && window.innerWidth <= 1024)
     };
     
     // Stampa info di debug
@@ -140,8 +141,73 @@
         // NON avviare automaticamente la conversazione
         initSocketConnection();
         
+        // Configura gestori per tastiera mobile
+        if (APP_CONFIG.IS_MOBILE) {
+          setupMobileKeyboardHandlers();
+        }
+        
+        // Configura auto-resize dell'input
+        setupInputAutoResize();
+        
         debugLog('Inizializzazione completata, in attesa di interazione utente');
       }, 100);
+    }
+    
+    /**
+     * Configura l'auto-resize dell'input (stile ChatGPT)
+     */
+    function setupInputAutoResize() {
+      if (!elements.chatInput) return;
+      
+      // Imposta la funzione di auto-resize
+      const resizeInput = () => {
+        elements.chatInput.style.height = 'auto'; // Reset altezza
+        
+        // Calcola l'altezza in base al contenuto
+        const newHeight = Math.min(elements.chatInput.scrollHeight, 120); // Max 120px
+        elements.chatInput.style.height = `${newHeight}px`;
+        
+        // Se ci troviamo su mobile, aggiusta lo scroll
+        if (APP_CONFIG.IS_MOBILE && newHeight >= 80) {
+          setTimeout(scrollToBottom, 10);
+        }
+      };
+      
+      // Aggiungi gli event listener
+      elements.chatInput.addEventListener('input', resizeInput);
+      elements.chatInput.addEventListener('focus', resizeInput);
+      
+      // Initial resize
+      setTimeout(resizeInput, 100);
+    }
+    
+    /**
+     * Gestori specifici per la tastiera mobile
+     */
+    function setupMobileKeyboardHandlers() {
+      // Usa la VisualViewport API se disponibile (iOS 13+, Android recenti)
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', handleVisualViewportResize);
+        window.visualViewport.addEventListener('scroll', handleVisualViewportResize);
+        debugLog('VisualViewport API disponibile, configurata');
+      } else {
+        // Fallback per browser più vecchi
+        window.addEventListener('resize', handleMobileResize);
+        debugLog('Usando fallback resize per tastiera mobile');
+      }
+      
+      // Per Safari iOS: il focus su input dovrebbe scrollare la pagina
+      if (elements.chatInput) {
+        elements.chatInput.addEventListener('focus', () => {
+          // Piccolo delay per dare tempo al keyboard di apparire
+          setTimeout(() => {
+            scrollToBottom(true);
+            
+            // Assicurati che l'input sia visibile
+            elements.chatInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 300);
+        });
+      }
     }
     
     /**
@@ -160,22 +226,30 @@
       adjustChatLayout();
       
       // Aggiungi listener per adattare il layout quando la finestra cambia dimensione
-      window.addEventListener('resize', adjustChatLayout);
+      window.addEventListener('resize', () => {
+        // Throttle per non sovraccaricare
+        if (!window.resizeThrottle) {
+          window.resizeThrottle = setTimeout(() => {
+            adjustChatLayout();
+            window.resizeThrottle = null;
+          }, 200);
+        }
+      });
       
       debugLog('Layout chat inizializzato');
     }
   
     /**
      * Adatta il layout della chat in base alle dimensioni della finestra
+     * Versione migliorata con supporto per notch e home indicators
      */
     function adjustChatLayout() {
       if (!elements.chatWrapper) return;
       
-      // Ottieni altezza della viewport
+      // Ottieni altezza della viewport considerando le safe areas
       const viewportHeight = window.innerHeight;
       
-      // Calcola l'altezza che dovrebbe avere il wrapper della chat
-      // sottraendo l'altezza di header, footer e altri elementi fissi
+      // Determina altezza di header e footer
       let headerHeight = 0;
       const header = document.querySelector('header');
       if (header) {
@@ -188,25 +262,19 @@
         footerHeight = footer.offsetHeight;
       }
       
-      // Aggiungi un po' di padding per sicurezza
-      const safetyPadding = APP_CONFIG.IS_MOBILE ? 80 : 20;
+      // Determina altezza input
+      const inputHeight = elements.chatInput ? 
+        (elements.chatInput.offsetHeight + 24) : 70;
       
-      // Calcola l'altezza ideale
-      const idealHeight = viewportHeight - headerHeight - footerHeight - safetyPadding;
+      // Calcola l'altezza del contenitore messaggi
+      const messagesHeight = viewportHeight - headerHeight - footerHeight - inputHeight;
       
-      // Imposta l'altezza del wrapper
-      elements.chatWrapper.style.height = `${idealHeight}px`;
-      
-      // Su mobile, imposta anche l'altezza dei messaggi
-      if (APP_CONFIG.IS_MOBILE) {
-        const inputHeight = elements.chatInput ? elements.chatInput.offsetHeight + 40 : 60;
-        const messagesHeight = idealHeight - inputHeight;
-        if (elements.chatMessages) {
-          elements.chatMessages.style.height = `${messagesHeight}px`;
-        }
+      // Imposta l'altezza dei messaggi
+      if (elements.chatMessages) {
+        elements.chatMessages.style.height = `${Math.max(300, messagesHeight)}px`;
       }
       
-      debugLog(`Layout chat adattato - altezza: ${idealHeight}px`);
+      debugLog(`Layout chat adattato - altezza messaggi: ${messagesHeight}px`);
     }
     
     // Ripristino stato da localStorage
@@ -407,7 +475,7 @@
         }
       });
       
-      // Ricezione dei chunk di risposta dell'assistente
+      // Ricezione dei chunk di risposta dell'assistente - Migliorata per esperienza ChatGPT
       socket.on('assistant_chunk', (data) => {
         // Mostriamo i chunk solo se la conversazione è stata avviata esplicitamente dall'utente
         if (isConversationStarted && hasUserInteracted) {
@@ -491,7 +559,7 @@
             if (msg.role === 'user') {
               addUserMessage(msg.content);
             } else if (msg.role === 'assistant') {
-              addAssistantMessage(msg.content);
+              addAssistantMessage(msg.content, false); // false = non animare messaggi caricati
             }
           });
           
@@ -511,7 +579,7 @@
     }
     
     /**
-     * Gestisce i chunk di risposta dell'assistente
+     * Gestisce i chunk di risposta dell'assistente - Migliorata per stile ChatGPT
      */
     function handleAssistantChunk(data) {
       if (!data || !hasUserInteracted) return;
@@ -527,6 +595,7 @@
       
       if (!messageElement) {
         messageElement = createMessageElement('assistant', '');
+        messageElement.classList.add('message-new'); // Classe per evidenziare nuovi messaggi
         if (elements.chatMessages) {
           elements.chatMessages.appendChild(messageElement);
         }
@@ -537,18 +606,38 @@
       
       // Se c'è un chunk da aggiungere
       if (data.chunk) {
-        // Aggiorna il contenuto del messaggio
+        // Nascondi l'indicatore di digitazione quando iniziamo a ricevere contenuto
+        if (messageTextElement && messageTextElement.innerHTML === '') {
+          hideTypingIndicator();
+        }
+        
+        // Aggiorna il contenuto del messaggio - Stile ChatGPT character by character
         if (messageTextElement) {
           if (data.message) {
             // Se c'è un messaggio completo, usalo direttamente
             messageTextElement.innerHTML = formatMessage(data.message);
           } else {
-            // Altrimenti aggiungi solo il chunk
+            // Altrimenti aggiungi solo il chunk con effetto digitazione
             const currentContent = messageTextElement.innerHTML;
             const newContent = formatMessage(currentContent + data.chunk);
             messageTextElement.innerHTML = newContent;
+            
+            // Evidenzia l'ultimo carattere aggiunto (effetto ChatGPT)
+            const tempSpan = document.createElement('span');
+            tempSpan.className = 'highlight-text';
+            tempSpan.textContent = data.chunk.charAt(data.chunk.length - 1);
+            
+            // Rimuovi eventuali span residui (cleanup)
+            const oldHighlights = messageTextElement.querySelectorAll('.highlight-text');
+            oldHighlights.forEach(el => {
+              el.outerHTML = el.textContent;
+            });
           }
-          scrollToBottom();
+          
+          // Scorrimento fluido mentre il messaggio cresce
+          if (isScrolledToBottom()) {
+            scrollToBottom(true); // true = smooth scrolling
+          }
         }
       }
       
@@ -588,6 +677,9 @@
         if (elements.chatInput) {
           elements.chatInput.disabled = false;
           elements.chatInput.focus();
+          
+          // Reimposta l'altezza dell'input
+          elements.chatInput.style.height = 'auto';
         }
         
         if (elements.sendButton) {
@@ -596,6 +688,9 @@
         
         // Reset del contatore di tentativi
         retryCount = 0;
+        
+        // Scrolling automatico al completamento
+        scrollToBottom();
         
         // Traccia evento
         trackEvent('message_received');
@@ -653,6 +748,16 @@
             if (elements.chatForm) {
               elements.chatForm.dispatchEvent(new Event('submit'));
             }
+          }
+          
+          // Con Shift+Enter aggiungi una nuova riga (come in ChatGPT)
+          if (e.key === 'Enter' && e.shiftKey) {
+            // Nessuna azione speciale, il comportamento predefinito aggiungerà una nuova riga
+            setTimeout(() => {
+              // Applica l'auto-resize dell'input dopo l'aggiunta della nuova riga
+              elements.chatInput.style.height = 'auto';
+              elements.chatInput.style.height = `${Math.min(elements.chatInput.scrollHeight, 120)}px`;
+            }, 0);
           }
         });
         
@@ -712,43 +817,52 @@
         }
       });
       
-      // Ascoltatore per la gestione della tastiera mobile
-      if (APP_CONFIG.IS_MOBILE) {
-        // Usa la visibleViewport API se disponibile
-        if (window.visualViewport) {
-          window.visualViewport.addEventListener('resize', handleVisualViewportResize);
-          window.visualViewport.addEventListener('scroll', handleVisualViewportResize);
-        } else {
-          // Fallback per browser più vecchi
-          window.addEventListener('resize', handleMobileResize);
-        }
-        
-        debugLog('Event listener per tastiera mobile impostato');
+      // Event listener per messaggi e scorrimento - migliore UX
+      if (elements.chatMessages) {
+        elements.chatMessages.addEventListener('scroll', () => {
+          // Salva la posizione di scorrimento per ripristinarla se necessario
+          window.lastScrollPosition = elements.chatMessages.scrollTop;
+        });
       }
       
       debugLog('Tutti gli event listener configurati');
     }
     
     /**
-     * Funzione per gestire il viewport visibile
+     * Funzione per gestire il viewport visibile (versione migliorata)
      */
     function handleVisualViewportResize() {
       if (!elements.chatWrapper || !elements.chatMessages || !elements.chatInput) return;
       
+      // Utilizza l'API visualViewport per rilevare accuratamente la dimensione dello schermo con tastiera
       const viewportHeight = window.visualViewport.height;
       const windowHeight = window.innerHeight;
       
-      // Rileva se la tastiera è aperta (viewport più piccolo della finestra)
+      // Rileva se la tastiera è aperta (dinamicamente rispetto alle dimensioni del dispositivo)
+      // Consideriamo che se la viewport è ridotta di >20%, probabilmente la tastiera è aperta
       const keyboardOpen = viewportHeight < windowHeight * 0.8;
       
       if (keyboardOpen) {
-        // Quando la tastiera è aperta, riduci l'altezza della chat e assicurati che l'input sia visibile
-        elements.chatWrapper.style.height = `${viewportHeight - 60}px`;
-        elements.chatMessages.style.height = `${viewportHeight - 120}px`;
-        // Scorri in fondo per mostrare i messaggi più recenti
-        scrollToBottom();
-        // Fai uno scroll extra per assicurarti che l'input sia visibile
-        window.scrollTo(0, window.visualViewport.offsetTop + window.visualViewport.height);
+        debugLog(`Tastiera rilevata: viewport ${viewportHeight}px vs window ${windowHeight}px`);
+        
+        // Adatta i componenti all'apertura della tastiera
+        const inputHeight = elements.chatInput.offsetHeight + 40; // Spazio aggiuntivo per il container
+        const availableHeight = viewportHeight - inputHeight;
+        
+        // Regola altezza chat e scorri per mostrare input
+        elements.chatMessages.style.height = `${availableHeight}px`;
+        
+        // Scorri per assicurarti che l'input sia visibile
+        window.scrollTo(0, window.visualViewport.offsetTop);
+        
+        // Verifica se l'input è sullo schermo, altrimenti scorri
+        const inputRect = elements.chatInput.getBoundingClientRect();
+        if (inputRect.bottom > viewportHeight) {
+          window.scrollTo({
+            top: window.scrollY + (inputRect.bottom - viewportHeight) + 20,
+            behavior: 'smooth'
+          });
+        }
       } else {
         // Quando la tastiera è chiusa, ripristina le altezze normali
         adjustChatLayout();
@@ -756,20 +870,33 @@
     }
     
     /**
-     * Versione di fallback per browser più vecchi
+     * Gestione della tastiera mobile fallback per browser più vecchi
      */
     function handleMobileResize() {
       if (!APP_CONFIG.IS_MOBILE) return;
       
       const viewportHeight = window.innerHeight;
+      const initialHeight = window.initialWindowHeight || window.innerHeight;
       
-      // Usa un valore di riferimento per rilevare se la tastiera potrebbe essere aperta
-      if (viewportHeight < 500) {
-        // Possibile tastiera aperta
+      // Calcola una soglia dinamica basata sull'altezza iniziale della finestra
+      const thresholdRatio = 0.75; // 75% dell'altezza originale
+      const keyboardThreshold = initialHeight * thresholdRatio;
+      
+      if (viewportHeight < keyboardThreshold) {
+        // Tastiera probabile
+        debugLog(`Tastiera rilevata (fallback): ${viewportHeight}px vs ${initialHeight}px threshold`);
+        
         if (elements.chatWrapper) {
-          elements.chatWrapper.style.height = `${viewportHeight - 60}px`;
+          const inputHeight = elements.chatInput ? elements.chatInput.offsetHeight + 40 : 70;
+          const availableHeight = viewportHeight - inputHeight - 20;
+          
+          // Regola altezza chat
+          if (elements.chatMessages) {
+            elements.chatMessages.style.height = `${availableHeight}px`;
+          }
         }
-        scrollToBottom();
+        // Scorri in fondo per vedere i messaggi più recenti
+        scrollToBottom(true);
       } else {
         // Tastiera chiusa
         adjustChatLayout();
@@ -786,6 +913,12 @@
         
         // Disabilita la prevenzione dell'attivazione automatica
         preventAutoActivation = false;
+        
+        // Salva l'altezza iniziale della finestra per calcoli tastiera
+        if (typeof window.initialWindowHeight === 'undefined') {
+          window.initialWindowHeight = window.innerHeight;
+          debugLog(`Altezza iniziale finestra salvata: ${window.initialWindowHeight}px`);
+        }
       }
     }
   
@@ -865,7 +998,7 @@
         elements.body.classList.add('chat-active');
       }
       
-      // Nascondi la sezione di marketing con una transizione
+      // Nascondi la sezione di marketing con una transizione fluida
       if (elements.marketingSection) {
         debugLog('Nascondo sezione marketing con transizione');
         elements.marketingSection.classList.add('fade-out');
@@ -874,7 +1007,10 @@
         setTimeout(() => {
           elements.marketingSection.classList.add('hidden');
           debugLog('Sezione marketing completamente nascosta');
-        }, 500);
+          
+          // Regola layout dopo che marketing è nascosto
+          adjustChatLayout();
+        }, 300); // Tempo ridotto per una transizione più veloce
       } else {
         debugLog('ERRORE: Impossibile trovare sezione marketing');
       }
@@ -886,7 +1022,7 @@
         // Dopo l'animazione, nascondi completamente
         setTimeout(() => {
           elements.startInstruction.classList.add('hidden');
-        }, 500);
+        }, 300);
       }
       
       // Salva lo stato in localStorage
@@ -901,13 +1037,17 @@
       // Focus sull'input
       if (elements.chatInput) {
         setTimeout(() => {
-          if (APP_CONFIG.IS_MOBILE) {
-            // Su mobile, scrolliamo alla posizione dell'input
-            const inputRect = elements.chatInput.getBoundingClientRect();
-            window.scrollTo(0, window.scrollY + inputRect.top - window.innerHeight / 2);
-          }
           elements.chatInput.focus();
-        }, 300);
+          
+          // Fornisci feedback tattile su dispositivi che lo supportano
+          if (window.navigator && window.navigator.vibrate) {
+            try {
+              window.navigator.vibrate(50); // Vibrazione sottile
+            } catch (e) {
+              // Ignora errori, la vibrazione è solo un miglioramento
+            }
+          }
+        }, 400); // Tempo aumentato per consentire il completamento dell'animazione
       }
     }
     
@@ -936,12 +1076,12 @@
         if (conversationState.exists && conversationState.messages.length > 0) {
           debugLog(`Ripristino conversazione esistente con ${conversationState.messages.length} messaggi`);
           
-          // Mostra messaggi esistenti
+          // Mostra messaggi esistenti senza animazione
           conversationState.messages.forEach(msg => {
             if (msg.role === 'user') {
               addUserMessage(msg.content);
             } else if (msg.role === 'assistant') {
-              addAssistantMessage(msg.content);
+              addAssistantMessage(msg.content, false); // false = non animare i messaggi caricati
             }
           });
           
@@ -1006,7 +1146,7 @@
         }
       } catch (error) {
         debugLog(`Errore nell'avvio della conversazione: ${error.message}`);
-        addAssistantMessage(translations.error.generic);
+        addAssistantMessage(translations.error.generic, true);
       }
     }
     
@@ -1044,7 +1184,7 @@
     }
   
     /**
-     * Invio messaggio utente
+     * Invio messaggio utente - migliorato stile ChatGPT
      */
     function handleSubmitMessage(e) {
       e.preventDefault();
@@ -1071,7 +1211,7 @@
           if (elements.chatForm) {
             elements.chatForm.dispatchEvent(new Event('submit'));
           }
-        }, 1000);
+        }, 800);
         
         return;
       }
@@ -1097,7 +1237,7 @@
             if (elements.chatForm) {
               elements.chatForm.dispatchEvent(new Event('submit'));
             }
-          }, 1000);
+          }, 800);
         };
         
         socket.on('connect', onConnect);
@@ -1113,6 +1253,9 @@
       // Pulizia dell'input
       elements.chatInput.value = '';
       
+      // Reimposta l'altezza dell'input dopo la pulizia
+      elements.chatInput.style.height = 'auto';
+      
       // Aggiornamento dei dati della conversazione
       conversationState.messages.push({ role: 'user', content: userInput });
       
@@ -1126,10 +1269,16 @@
       
       if (elements.sendButton) {
         elements.sendButton.disabled = true;
+        
+        // Animazione pulsante invio
+        elements.sendButton.classList.add('sending');
+        setTimeout(() => {
+          elements.sendButton.classList.remove('sending');
+        }, 300);
       }
       
-      // Mostra l'indicatore di digitazione avanzato
-      showTypingIndicator(true); // true = modalità avanzata
+      // Mostra l'indicatore di digitazione
+      showTypingIndicator();
       
       try {
         // Invia il messaggio tramite socket
@@ -1143,18 +1292,11 @@
         // Traccia evento
         trackEvent('message_sent');
         
-        // Aggiunto per mobile: posizionamento dopo l'invio
+        // Su mobile, assicurati che la vista sia posizionata correttamente
         if (APP_CONFIG.IS_MOBILE) {
-          // Piccolo ritardo per dare tempo al browser di elaborare l'invio
+          // Piccolo ritardo per dare tempo di aggiornare il DOM
           setTimeout(() => {
-            scrollToBottom();
-            // Posiziona la pagina in modo che l'input sia visibile
-            if (elements.chatInput) {
-              const inputRect = elements.chatInput.getBoundingClientRect();
-              if (inputRect.bottom > window.innerHeight) {
-                window.scrollTo(0, window.scrollY + (inputRect.bottom - window.innerHeight) + 20);
-              }
-            }
+            scrollToBottom(true); // smooth scrolling
           }, 100);
         }
       } catch (error) {
@@ -1184,9 +1326,9 @@
       retryCount++;
       
       if (retryCount <= APP_CONFIG.MAX_RETRIES) {
-        addAssistantMessage(`${translations.error.connection} ${translations.messages.retry} (${retryCount}/${APP_CONFIG.MAX_RETRIES})`);
+        addAssistantMessage(`${translations.error.connection} ${translations.messages.retry} (${retryCount}/${APP_CONFIG.MAX_RETRIES})`, true);
       } else {
-        addAssistantMessage(translations.error.generic);
+        addAssistantMessage(translations.error.generic, true);
         retryCount = 0;
       }
     }
@@ -1218,6 +1360,14 @@
       
       // Assicurati che il bottone sia visibile scrollando in fondo
       scrollToBottom();
+      
+      // Aggiungi una piccola animazione per attirare l'attenzione
+      setTimeout(() => {
+        confirmButton.classList.add('animate-pulse');
+        setTimeout(() => {
+          confirmButton.classList.remove('animate-pulse');
+        }, 1500);
+      }, 500);
     }
   
     /**
@@ -1226,13 +1376,13 @@
     async function handleFinalSubmission() {
       if (!elements.csrfToken || !elements.csrfToken.value) {
         debugLog("ERRORE: Token CSRF mancante");
-        addAssistantMessage(translations.error.generic);
+        addAssistantMessage(translations.error.generic, true);
         return;
       }
       
       if (!conversationState.collectedData) {
         debugLog("ERRORE: Dati raccolti mancanti");
-        addAssistantMessage(translations.error.generic);
+        addAssistantMessage(translations.error.generic, true);
         return;
       }
       
@@ -1277,42 +1427,41 @@
           // Nascondi l'indicatore di digitazione
           hideTypingIndicator();
           
-          // Dopo un breve ritardo, mostra la schermata di ringraziamento
+          // Dopo un breve ritardo, mostra la schermata di ringraziamento con transizione fluida
           setTimeout(() => {
-            elements.chatWrapper.classList.add('hidden');
-            if (elements.thankYouScreen) {
-              elements.thankYouScreen.classList.remove('hidden');
+            if (elements.chatWrapper) {
+              elements.chatWrapper.classList.add('fade-out');
               
-              // Traccia evento di conversione
-              trackEvent('plan_requested');
+              setTimeout(() => {
+                elements.chatWrapper.classList.add('hidden');
+                if (elements.thankYouScreen) {
+                  elements.thankYouScreen.classList.add('fade-in');
+                  elements.thankYouScreen.classList.remove('hidden');
+                  
+                  // Traccia evento di conversione
+                  trackEvent('plan_requested');
+                }
+              }, 300);
             }
-          }, 500);
+          }, 300);
         } else {
           throw new Error(data.error || translations.error.generic);
         }
       } catch (error) {
         debugLog(`Errore nell'invio dei dati finali: ${error.message}`);
         hideTypingIndicator();
-        addAssistantMessage(`${translations.error.generic} ${error.message}`);
+        addAssistantMessage(`${translations.error.generic} ${error.message}`, true);
       }
     }
   
     /**
-     * Mostra l'indicatore di digitazione
-     * @param {boolean} advanced - Se true, mostra un indicatore più dettagliato
+     * Mostra l'indicatore di digitazione - stile ChatGPT
      */
-    function showTypingIndicator(advanced = false) {
+    function showTypingIndicator() {
       if (!elements.typingIndicator) return;
       
       elements.typingIndicator.classList.remove('hidden');
-      
-      if (advanced) {
-        // Aggiunge classe per stile avanzato
-        elements.typingIndicator.classList.add('advanced');
-      } else {
-        // Stile base
-        elements.typingIndicator.classList.remove('advanced');
-      }
+      scrollToBottom(true);
     }
   
     /**
@@ -1322,81 +1471,87 @@
       if (!elements.typingIndicator) return;
       
       elements.typingIndicator.classList.add('hidden');
-      elements.typingIndicator.classList.remove('advanced');
     }
   
     /**
-     * Aggiunta messaggio utente
+     * Aggiunta messaggio utente - Stile ChatGPT
      */
     function addUserMessage(message) {
-      if (!elements.chatMessages) return;
-      
-      const messageElement = createMessageElement('user', message);
-      elements.chatMessages.appendChild(messageElement);
-      scrollToBottom();
-    }
+        if (!elements.chatMessages) return;
+        
+        // Assicurati che i messaggi siano visibili in console per debug
+        console.log("Aggiungendo messaggio utente:", message);
+        
+        // Crea l'elemento con la struttura corretta
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', 'message-user');
+        
+        // Contenuto del messaggio - semplificato per debug
+        const contentDiv = document.createElement('div');
+        contentDiv.classList.add('message-content');
+        contentDiv.style.backgroundColor =  '#5b7fff'; // Use the hex code directly
+        contentDiv.style.color = 'white';
+        
+        const textDiv = document.createElement('div');
+        textDiv.classList.add('message-text');
+        textDiv.textContent = message; // Usa textContent per sicurezza
+        
+        // Monta la struttura DOM
+        contentDiv.appendChild(textDiv);
+        messageDiv.appendChild(contentDiv);
+        
+        // Aggiungi al container
+        elements.chatMessages.appendChild(messageDiv);
+        scrollToBottom();
+      }
   
     /**
-     * Aggiunta messaggio assistente
+     * Aggiunta messaggio assistente - con opzione animazione
+     * @param {string} message - Testo del messaggio
+     * @param {boolean} animate - Se true, anima il messaggio
      */
-    function addAssistantMessage(message) {
+    function addAssistantMessage(message, animate = true) {
       if (!elements.chatMessages) return;
       
       const messageElement = createMessageElement('assistant', message);
+      messageElement.classList.add('message-new');
       elements.chatMessages.appendChild(messageElement);
+      
+      if (animate) {
+        // Aggiungi classe temporanea per evidenziare il nuovo messaggio
+        messageElement.classList.add('message-highlight');
+        setTimeout(() => {
+          messageElement.classList.remove('message-highlight');
+        }, 1000);
+      }
+      
       scrollToBottom();
     }
   
     /**
-     * Creazione elemento messaggio
+     * Creazione elemento messaggio - Stile ChatGPT
      */
-    function createMessageElement(role, content) {
-      const messageDiv = document.createElement('div');
-      messageDiv.classList.add('message', `message-${role}`);
-      messageDiv.setAttribute('role', 'listitem');
-      
-      const avatarDiv = document.createElement('div');
-      avatarDiv.classList.add('message-avatar');
-      
-      // Avatar diverso in base al ruolo
-      if (role === 'user') {
-        avatarDiv.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="avatar-icon">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-            <circle cx="12" cy="7" r="4"></circle>
-          </svg>
-        `;
-      } else {
-        avatarDiv.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="avatar-icon">
-            <text x="12" y="16" font-family="Inter, sans-serif" font-size="14" font-weight="bold" fill="currentColor" text-anchor="middle">J</text>
-          </svg>
-        `;
-      }
-      
-      const contentDiv = document.createElement('div');
-      contentDiv.classList.add('message-content');
-      
-      const textDiv = document.createElement('div');
-      textDiv.classList.add('message-text');
-      textDiv.innerHTML = formatMessage(content);
-      
-      // Aggiungi label ARIA per i lettori di schermo (accessibilità)
-      const roleLabel = role === 'user' ? 'Tu' : 'Joe';
-      const srOnly = document.createElement('span');
-      srOnly.classList.add('sr-only');
-      srOnly.textContent = `${roleLabel}: `;
-      
-      contentDiv.appendChild(srOnly);
-      contentDiv.appendChild(textDiv);
-      messageDiv.appendChild(avatarDiv);
-      messageDiv.appendChild(contentDiv);
-      
-      return messageDiv;
-    }
+    // Replace the createMessageElement function with this version
+function createMessageElement(role, content) {
+    const messageDiv = document.createElement('div');
+    messageDiv.classList.add('message', `message-${role}`);
+    
+    // Basic bubble-style message
+    const contentDiv = document.createElement('div');
+    contentDiv.classList.add('message-content');
+    
+    const textDiv = document.createElement('div');
+    textDiv.classList.add('message-text');
+    textDiv.innerHTML = content; // Don't format to troubleshoot
+    
+    contentDiv.appendChild(textDiv);
+    messageDiv.appendChild(contentDiv);
+    
+    return messageDiv;
+  }
   
     /**
-     * Formattazione messaggio (markdown semplice)
+     * Formattazione messaggio (markdown semplice) - Migliorata
      */
     function formatMessage(message) {
       if (!message) return '';
@@ -1409,6 +1564,12 @@
       
       // Formattazione italic
       formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+      
+      // Link inline
+      formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      
+      // Code inline
+      formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
       
       // Liste numerate
       formatted = formatted.replace(/^\d+\.\s+(.*?)$/gm, '<li>$1</li>');
@@ -1458,8 +1619,11 @@
           const containerScrollHeight = elements.chatMessages.scrollHeight;
           const currentScrollPosition = elements.chatMessages.scrollTop;
           
-          // Siamo vicini al fondo?
-          const isNearBottom = (containerScrollHeight - currentScrollPosition - containerHeight) < 150;
+          // Più intelligente: calcola percentuale di scorrimento
+          const scrollPercentage = (currentScrollPosition + containerHeight) / containerScrollHeight;
+          
+          // Siamo vicini al fondo se siamo oltre il 90% di scorrimento
+          const isNearBottom = scrollPercentage > 0.9;
           
           // Verifica se sono stati aggiunti nuovi messaggi
           for (const mutation of mutations) {
@@ -1480,20 +1644,44 @@
           
           // Scorri solo se necessario
           if (shouldScroll) {
-            scrollToBottom();
+            scrollToBottom(true); // smooth scroll
           }
         });
         
-        // Osserva solo le modifiche al DOM che interessano
+        // Osserva modifiche al DOM
         window.chatScrollObserver.observe(elements.chatMessages, {
-          childList: true,      // Rileva aggiunte o rimozioni di nodi figlio
-          subtree: false,       // Non osservare ricorsivamente tutti i discendenti
-          characterData: false  // Non osservare modifiche al testo
+          childList: true,
+          subtree: false,
+          characterData: false
         });
         
         // Aggiungi anche un listener per il resize della finestra
-        window.addEventListener('resize', scrollToBottom);
+        window.addEventListener('resize', () => {
+          if (isScrolledToBottom()) {
+            scrollToBottom();
+          }
+        });
       }
+    }
+  
+    /**
+     * Verifica se siamo già scrollati in fondo
+     */
+    function isScrolledToBottom() {
+      if (!elements.chatMessages) return true;
+      
+      const containerHeight = elements.chatMessages.clientHeight;
+      const containerScrollHeight = elements.chatMessages.scrollHeight;
+      const currentScrollPosition = elements.chatMessages.scrollTop;
+      
+      // Vicini al fondo se siamo a meno di 100px o 95% scrollati
+      const pixelThreshold = 100;
+      const percentageThreshold = 0.95;
+      
+      const pixelToBottom = containerScrollHeight - currentScrollPosition - containerHeight;
+      const scrollPercentage = (currentScrollPosition + containerHeight) / containerScrollHeight;
+      
+      return pixelToBottom < pixelThreshold || scrollPercentage > percentageThreshold;
     }
   
     /**
@@ -1520,10 +1708,13 @@
     }
   
     /**
-     * Scorrimento in fondo alla chat - versione migliorata in stile ChatGPT
+     * Scorrimento in fondo alla chat - ChatGPT-style scrolling
+     * @param {boolean} smooth - Se true, usa animazione fluida
      */
-    function scrollToBottom() {
+    function scrollToBottom(smooth = false) {
       if (!elements.chatMessages) return;
+      
+      const behavior = smooth && !APP_CONFIG.IS_MOBILE ? 'smooth' : 'auto';
       
       // Trova l'ultimo messaggio o elemento nella chat
       const messages = elements.chatMessages.children;
@@ -1531,46 +1722,17 @@
       
       const lastElement = messages[messages.length - 1];
       
-      // Calcola l'altezza totale della chat e la posizione corrente
-      const containerHeight = elements.chatMessages.clientHeight;
-      const containerScrollHeight = elements.chatMessages.scrollHeight;
-      const currentScrollPosition = elements.chatMessages.scrollTop;
-      
-      // Determina se siamo già vicini al fondo
-      // Se siamo a meno di 100px dal fondo o l'utente ha iniziato a scorrere manualmente
-      const isNearBottom = (containerScrollHeight - currentScrollPosition - containerHeight) < 100;
-      
-      // Se non siamo vicini al fondo, non scrolliamo automaticamente a meno che non sia
-      // un nuovo messaggio dell'utente o il primo caricamento o siamo su mobile con tastiera aperta
-      if (!isNearBottom && messages.length > 2 && 
-          !lastElement.classList.contains('message-user') &&
-          !lastElement.classList.contains('confirmation-container') && 
-          !APP_CONFIG.IS_MOBILE) {
-        return; // L'utente sta probabilmente leggendo messaggi passati, non disturbare
-      }
-      
-      // Tecnica 1: Usa scrollIntoView per l'elemento più recente
+      // Scorri all'ultimo elemento con la behavior specificata
       lastElement.scrollIntoView({ 
-        behavior: APP_CONFIG.IS_MOBILE ? 'auto' : 'smooth', 
+        behavior: behavior, 
         block: 'end' 
       });
       
-      // Tecnica 2: Imposta direttamente scrollTop al massimo
-      // con un piccolo ritardo per assicurarsi che il rendering sia completo
-      setTimeout(() => {
+      // Assicura che lo scroll raggiunga effettivamente il fondo
+      // Utile soprattutto su Safari iOS
+      
         elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
-        
-        // Su mobile, assicurati che l'input sia visibile
-        if (APP_CONFIG.IS_MOBILE && elements.chatInput) {
-          // Piccolo ritardo extra per dispositivi più lenti
-          setTimeout(() => {
-            const inputRect = elements.chatInput.getBoundingClientRect();
-            if (inputRect.top > window.innerHeight || inputRect.bottom < 0) {
-              window.scrollTo(0, document.body.scrollHeight);
-            }
-          }, 50);
-        }
-      }, APP_CONFIG.IS_MOBILE ? 0 : 50);
+      
     }
   
     /**
@@ -1594,7 +1756,7 @@
     function handleInactivity() {
       // Mostra messaggio di timeout se la conversazione è in corso
       if (conversationState.exists && conversationState.isActive && isChatActive && isConversationStarted && hasUserInteracted) {
-        addAssistantMessage(translations.messages.timeout);
+        addAssistantMessage(translations.messages.timeout, true);
       }
     }
   
@@ -1615,9 +1777,6 @@
         }
       } else if (document.visibilityState === 'hidden') {
         debugLog('Pagina nascosta');
-        
-        // Con WebSocket, manteniamo la connessione attiva anche con pagina nascosta
-        // per evitare problemi di riconnessione, soprattutto su mobile
         
         // Impostiamo solo un timer lungo per risparmiare batteria se la pagina resta nascosta molto tempo
         setTimeout(() => {
@@ -1645,10 +1804,13 @@
       
       if (elements.chatWrapper) {
         elements.chatWrapper.classList.remove('hidden');
+        // Rimuovi eventuali classi di transizione
+        elements.chatWrapper.classList.remove('fade-out');
       }
       
       if (elements.thankYouScreen) {
         elements.thankYouScreen.classList.add('hidden');
+        elements.thankYouScreen.classList.remove('fade-in');
       }
       
       // Reset dello stato
@@ -1693,6 +1855,19 @@
       } else {
         // Avvio nuova conversazione
         startConversation();
+      }
+      
+      // Focus sull'input
+      if (elements.chatInput) {
+        elements.chatInput.disabled = false;
+        setTimeout(() => {
+          elements.chatInput.focus();
+        }, 300);
+      }
+      
+      // Abilita il pulsante di invio
+      if (elements.sendButton) {
+        elements.sendButton.disabled = false;
       }
     }
   
