@@ -2,7 +2,7 @@
 <html lang="<%= currentLang %>">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>DietingWithJoe - <%= t('app.subtitle') %></title>
   <meta name="description" content="<%= t('app.description') %>">
   
@@ -81,8 +81,36 @@
     </div>
   </div>
 
-  <!-- Language Selector -->
-  <div class="language-selector" role="navigation" aria-label="<%= t('language.selector') %>">
+  <!-- Menu a Icona -->
+  <div class="menu-trigger">
+    <button id="menu-button" aria-label="<%= t('menu.label', 'Menu') %>" class="menu-button">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="1"></circle>
+        <circle cx="12" cy="5" r="1"></circle>
+        <circle cx="12" cy="19" r="1"></circle>
+      </svg>
+    </button>
+    <div id="menu-dropdown" class="menu-dropdown hidden">
+      <div class="menu-dropdown-section">
+        <span class="menu-dropdown-title"><%= t('menu.language', 'Lingua') %></span>
+        <a href="/changelanguage/it?redirect=/" role="menuitem" class="<%= currentLang === 'it' ? 'active' : '' %>" lang="it">Italiano</a>
+        <a href="/changelanguage/en?redirect=/" role="menuitem" class="<%= currentLang === 'en' ? 'active' : '' %>" lang="en">English</a>
+        <a href="/changelanguage/fr?redirect=/" role="menuitem" class="<%= currentLang === 'fr' ? 'active' : '' %>" lang="fr">Français</a>
+        <a href="/changelanguage/es?redirect=/" role="menuitem" class="<%= currentLang === 'es' ? 'active' : '' %>" lang="es">Español</a>
+        <a href="/changelanguage/de?redirect=/" role="menuitem" class="<%= currentLang === 'de' ? 'active' : '' %>" lang="de">Deutsch</a>
+        <a href="/changelanguage/pt?redirect=/" role="menuitem" class="<%= currentLang === 'pt' ? 'active' : '' %>" lang="pt">Português</a>
+      </div>
+      <div class="menu-dropdown-divider"></div>
+      <div class="menu-dropdown-section">
+        <a href="/privacy" role="menuitem"><%= t('footer.privacy') %></a>
+        <a href="/terms" role="menuitem"><%= t('footer.terms') %></a>
+        <a href="/contact" role="menuitem"><%= t('footer.contact') %></a>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Language Selector (hidden but presente for backend compatibility) -->
+  <div class="language-selector hidden" role="navigation" aria-label="<%= t('language.selector') %>">
     <button class="language-toggle" aria-haspopup="true" aria-expanded="false">
       <span class="current-lang"><%= currentLang.toUpperCase() %></span>
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="language-icon"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path><line x1="2" y1="12" x2="22" y2="12"></line></svg>
@@ -97,11 +125,6 @@
     </div>
   </div>
   
-  <!-- Minimized Brand (visibile solo in chat attiva) -->
-  <div class="minimized-brand">
-    <div class="brand-name">JOE</div>
-  </div>
-
   <!-- Connection Status -->
   <div id="connection-status" class="hidden">
     <span id="connection-message"><%= t('messages.connecting') %></span>
@@ -135,8 +158,11 @@
         <%= t('marketing.trust', 'Usato da oltre 10.000 persone • 4.8/5 soddisfazione') %>
       </div>
     </div>
+
+    <button id="start-chat-btn" class="btn btn-primary start-chat-button">Parla con Joe</button>
+
     
-    <p class="start-instruction"><%= t('chat.start_instruction', 'Inizia a scrivere per parlare con Joe...') %></p>
+    <p id="start-instruction" class="start-instruction"><%= t('chat.start_instruction', 'Inizia a scrivere per parlare con Joe...') %></p>
 
     <!-- Chat Interface -->
     <div class="chat-wrapper">
@@ -152,21 +178,21 @@
       </div>
       
       <!-- Input chat (dentro la chat-wrapper) -->
-      <div id="chat-input-container" class="chat-input-container">
-        <form id="chat-form" class="chat-form" aria-label="<%= t('chat.messageForm') %>">
-          <div class="input-wrapper">
-            <input type="text" id="chat-input" 
-                  placeholder="<%= t('chat.placeholder') %>" 
-                  aria-label="<%= t('chat.ariaLabel') %>"
-                  autocomplete="off">
-            <button type="submit" id="send-button" aria-label="<%= t('chat.send') %>">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="send-icon"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-            </button>
-          </div>
-        </form>
-      </div>
+      
     </div>
-
+    <div id="chat-input-container" class="chat-input-container">
+      <form id="chat-form" class="chat-form" aria-label="<%= t('chat.messageForm') %>">
+        <div class="input-wrapper">
+          <textarea id="chat-input" 
+                placeholder="<%= t('chat.placeholder') %>" 
+                aria-label="<%= t('chat.ariaLabel') %>"
+                autocomplete="off" rows="1"></textarea>
+          <button type="submit" id="send-button" aria-label="<%= t('chat.send') %>">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="send-icon"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </div>
+      </form>
+    </div>
     <!-- Thank You Screen (hidden initially) -->
     <div id="thank-you-screen" class="hidden" aria-live="polite">
       <div class="thank-you-content">
@@ -178,8 +204,8 @@
     </div>
   </main>
 
-  <!-- Footer -->
-  <footer class="footer">
+  <!-- Footer (hidden but presente for backend compatibility) -->
+  <footer class="footer hidden">
     <div class="footer-links">
       <a href="/privacy"><%= t('footer.privacy') %></a>
       <a href="/terms"><%= t('footer.terms') %></a>

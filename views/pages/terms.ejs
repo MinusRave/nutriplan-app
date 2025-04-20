@@ -2,35 +2,52 @@
   const pageTitle = t('pages.terms.title');
 %>
 
-<div class="policy-container">
-  <p class="policy-intro"><%= t('pages.terms.intro') %></p>
-  
-  <section class="policy-section">
-    <h2><%= t('pages.terms.service.title') %></h2>
-    <p><%= t('pages.terms.service.content') %></p>
-  </section>
-  
-  <section class="policy-section">
-    <h2><%= t('pages.terms.accuracy.title') %></h2>
-    <p><%= t('pages.terms.accuracy.content') %></p>
-  </section>
-  
-  <section class="policy-section">
-    <h2><%= t('pages.terms.responsibility.title') %></h2>
-    <p><%= t('pages.terms.responsibility.content') %></p>
-  </section>
-  
-  <section class="policy-section">
-    <h2><%= t('pages.terms.limitation.title') %></h2>
-    <p><%= t('pages.terms.limitation.content') %></p>
-  </section>
-  
-  <section class="policy-section">
-    <h2><%= t('pages.terms.changes.title') %></h2>
-    <p><%= t('pages.terms.changes.content') %></p>
-  </section>
-  
-  <div class="policy-updated">
-    <p>Last updated: <%= new Date().toLocaleDateString(currentLang, { year: 'numeric', month: 'long', day: 'numeric' }) %></p>
+<div class="app-container">
+  <div class="page-header">
+    <h1><%= pageTitle %></h1>
+    <p class="start-instruction"><%= t('pages.terms.intro') %></p>
+  </div>
+
+  <div class="page-body">
+    <div class="benefits">
+      <section class="benefit-item">
+        <div class="benefit-text">
+          <h2><%= t('pages.terms.service.title') %></h2>
+          <p><%= t('pages.terms.service.content') %></p>
+        </div>
+      </section>
+
+      <section class="benefit-item">
+        <div class="benefit-text">
+          <h2><%= t('pages.terms.accuracy.title') %></h2>
+          <p><%= t('pages.terms.accuracy.content') %></p>
+        </div>
+      </section>
+
+      <section class="benefit-item">
+        <div class="benefit-text">
+          <h2><%= t('pages.terms.responsibility.title') %></h2>
+          <p><%= t('pages.terms.responsibility.content') %></p>
+        </div>
+      </section>
+
+      <section class="benefit-item">
+        <div class="benefit-text">
+          <h2><%= t('pages.terms.limitation.title') %></h2>
+          <p><%= t('pages.terms.limitation.content') %></p>
+        </div>
+      </section>
+
+      <section class="benefit-item">
+        <div class="benefit-text">
+          <h2><%= t('pages.terms.changes.title') %></h2>
+          <p><%= t('pages.terms.changes.content') %></p>
+        </div>
+      </section>
+    </div>
+
+    <div class="start-instruction" style="margin-top: 2rem; font-size: 0.875rem; color: var(--text-light);">
+      <p>Last updated: <%= new Date().toLocaleDateString(currentLang, { year: 'numeric', month: 'long', day: 'numeric' }) %></p>
+    </div>
   </div>
 </div>

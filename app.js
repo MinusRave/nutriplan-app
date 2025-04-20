@@ -420,7 +420,7 @@ app.get('/health', (req, res) => {
 
 // Home page
 app.get('/', csrfProtection, (req, res) => {
-  res.render('index-modern', { 
+  res.render('index-simple', { 
     csrfToken: req.csrfToken(),
     clientInfo: req.clientInfo,
     currentLang: req.language

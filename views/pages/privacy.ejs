@@ -2,35 +2,52 @@
   const pageTitle = t('pages.privacy.title');
 %>
 
-<div class="policy-container">
-  <p class="policy-intro"><%= t('pages.privacy.intro') %></p>
-  
-  <section class="policy-section">
-    <h2><%= t('pages.privacy.collection.title') %></h2>
-    <p><%= t('pages.privacy.collection.content') %></p>
-  </section>
-  
-  <section class="policy-section">
-    <h2><%= t('pages.privacy.use.title') %></h2>
-    <p><%= t('pages.privacy.use.content') %></p>
-  </section>
-  
-  <section class="policy-section">
-    <h2><%= t('pages.privacy.protection.title') %></h2>
-    <p><%= t('pages.privacy.protection.content') %></p>
-  </section>
-  
-  <section class="policy-section">
-    <h2><%= t('pages.privacy.rights.title') %></h2>
-    <p><%= t('pages.privacy.rights.content') %></p>
-  </section>
-  
-  <section class="policy-section">
-    <h2><%= t('pages.privacy.contact.title') %></h2>
-    <p><%= t('pages.privacy.contact.content') %></p>
-  </section>
-  
-  <div class="policy-updated">
-    <p>Last updated: <%= new Date().toLocaleDateString(currentLang, { year: 'numeric', month: 'long', day: 'numeric' }) %></p>
+<div class="app-container">
+  <div class="page-header">
+    <h1><%= pageTitle %></h1>
+    <p class="start-instruction"><%= t('pages.privacy.intro') %></p>
+  </div>
+
+  <div class="page-body">
+    <div class="benefits">
+      <section class="benefit-item">
+        <div class="benefit-text">
+          <h2><%= t('pages.privacy.collection.title') %></h2>
+          <p><%= t('pages.privacy.collection.content') %></p>
+        </div>
+      </section>
+
+      <section class="benefit-item">
+        <div class="benefit-text">
+          <h2><%= t('pages.privacy.use.title') %></h2>
+          <p><%= t('pages.privacy.use.content') %></p>
+        </div>
+      </section>
+
+      <section class="benefit-item">
+        <div class="benefit-text">
+          <h2><%= t('pages.privacy.protection.title') %></h2>
+          <p><%= t('pages.privacy.protection.content') %></p>
+        </div>
+      </section>
+
+      <section class="benefit-item">
+        <div class="benefit-text">
+          <h2><%= t('pages.privacy.rights.title') %></h2>
+          <p><%= t('pages.privacy.rights.content') %></p>
+        </div>
+      </section>
+
+      <section class="benefit-item">
+        <div class="benefit-text">
+          <h2><%= t('pages.privacy.contact.title') %></h2>
+          <p><%= t('pages.privacy.contact.content') %></p>
+        </div>
+      </section>
+    </div>
+
+    <div class="start-instruction" style="margin-top: 2rem; font-size: 0.875rem; color: var(--text-light);">
+      <p>Last updated: <%= new Date().toLocaleDateString(currentLang, { year: 'numeric', month: 'long', day: 'numeric' }) %></p>
+    </div>
   </div>
 </div>

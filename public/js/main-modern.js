@@ -149,8 +149,77 @@
         // Configura auto-resize dell'input
         setupInputAutoResize();
         
+        // Inizializza menu a icona
+        setupMenuDropdown();
+        
         debugLog('Inizializzazione completata, in attesa di interazione utente');
       }, 100);
+
+      setTimeout(() => {
+        debugLog('Controllo eventi input...');
+        
+        if (!hasUserInteracted && elements.chatInput) {
+          // Aggiungi listener direttamente all'elemento per sicurezza
+          debugLog('Reinstallazione listener input per sicurezza');
+          
+          elements.chatInput.addEventListener('focus', function inputFocusHandler() {
+            console.log('Input focus event triggered');
+            markUserInteraction();
+            activateChatAndStartConversation();
+            // Rimuovi questo handler dopo il primo uso
+            elements.chatInput.removeEventListener('focus', inputFocusHandler);
+          });
+          
+          // Prova a simulare un click sull'input per attivare la chat
+          try {
+            debugLog('Tentativo di simulare focus sull\'input...');
+            // Mostra temporaneamente l'input per consentire il focus
+            if (elements.chatWrapper) {
+              const originalStyle = elements.chatWrapper.style.cssText;
+              elements.chatWrapper.style.opacity = '1';
+              elements.chatWrapper.style.pointerEvents = 'auto';
+              elements.chatWrapper.style.visibility = 'visible';
+              
+              // Concentra l'attenzione sull'input
+              elements.chatInput.focus();
+              
+              // Ripristina lo stile originale dopo il focus
+              setTimeout(() => {
+                elements.chatWrapper.style.cssText = originalStyle;
+              }, 100);
+            }
+          } catch (e) {
+            debugLog(`Errore nel simulare focus: ${e.message}`);
+          }
+        }
+      }, 2000);
+      
+    }
+    
+    /**
+     * Inizializza il menu a icona
+     */
+    function setupMenuDropdown() {
+      const menuButton = document.getElementById('menu-button');
+      const menuDropdown = document.getElementById('menu-dropdown');
+      
+      if (menuButton && menuDropdown) {
+        debugLog('Menu a icona configurato');
+        
+        menuButton.addEventListener('click', (e) => {
+          e.stopPropagation();
+          menuDropdown.classList.toggle('hidden');
+        });
+        
+        // Chiudi menu quando si clicca altrove
+        document.addEventListener('click', (e) => {
+          if (!menuDropdown.contains(e.target) && !menuButton.contains(e.target)) {
+            menuDropdown.classList.add('hidden');
+          }
+        });
+      } else {
+        debugLog('ATTENZIONE: Elementi menu a icona non trovati');
+      }
     }
     
     /**
@@ -169,7 +238,17 @@
         
         // Se ci troviamo su mobile, aggiusta lo scroll
         if (APP_CONFIG.IS_MOBILE && newHeight >= 80) {
-          setTimeout(scrollToBottom, 10);
+          // Usa requestAnimationFrame per fluidità
+          if (window.requestAnimationFrame) {
+            requestAnimationFrame(() => {
+              smoothScrollToBottom();
+            });
+          } else {
+            // Fallback per browser più vecchi
+            setTimeout(() => {
+              scrollToBottom(true);
+            }, 10);
+          }
         }
       };
       
@@ -201,12 +280,87 @@
         elements.chatInput.addEventListener('focus', () => {
           // Piccolo delay per dare tempo al keyboard di apparire
           setTimeout(() => {
-            scrollToBottom(true);
+            smoothScrollToBottom(true);
             
             // Assicurati che l'input sia visibile
             elements.chatInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }, 300);
         });
+      }
+    }
+    
+    /**
+     * Funzione per gestire il viewport visibile (versione migliorata)
+     */
+    function handleVisualViewportResize() {
+      if (!elements.chatWrapper || !elements.chatMessages || !elements.chatInput) return;
+      
+      // Utilizza l'API visualViewport per rilevare accuratamente la dimensione dello schermo con tastiera
+      const viewportHeight = window.visualViewport.height;
+      const windowHeight = window.innerHeight;
+      
+      // Rileva se la tastiera è aperta (dinamicamente rispetto alle dimensioni del dispositivo)
+      // Consideriamo che se la viewport è ridotta di >20%, probabilmente la tastiera è aperta
+      const keyboardOpen = viewportHeight < windowHeight * 0.8;
+      
+      if (keyboardOpen) {
+        debugLog(`Tastiera rilevata: viewport ${viewportHeight}px vs window ${windowHeight}px`);
+        
+        // Adatta i componenti all'apertura della tastiera
+        const inputHeight = elements.chatInput.offsetHeight + 40; // Spazio aggiuntivo per il container
+        const availableHeight = viewportHeight - inputHeight;
+        
+        // Regola altezza chat e scorri per mostrare input
+        elements.chatMessages.style.height = `${availableHeight}px`;
+        
+        // Scorri per assicurarti che l'input sia visibile
+        window.scrollTo(0, window.visualViewport.offsetTop);
+        
+        // Verifica se l'input è sullo schermo, altrimenti scorri
+        const inputRect = elements.chatInput.getBoundingClientRect();
+        if (inputRect.bottom > viewportHeight) {
+          window.scrollTo({
+            top: window.scrollY + (inputRect.bottom - viewportHeight) + 20,
+            behavior: 'smooth'
+          });
+        }
+      } else {
+        // Quando la tastiera è chiusa, ripristina le altezze normali
+        adjustChatLayout();
+      }
+    }
+    
+    /**
+     * Gestione della tastiera mobile fallback per browser più vecchi
+     */
+    function handleMobileResize() {
+      if (!APP_CONFIG.IS_MOBILE) return;
+      
+      const viewportHeight = window.innerHeight;
+      const initialHeight = window.initialWindowHeight || window.innerHeight;
+      
+      // Calcola una soglia dinamica basata sull'altezza iniziale della finestra
+      const thresholdRatio = 0.75; // 75% dell'altezza originale
+      const keyboardThreshold = initialHeight * thresholdRatio;
+      
+      if (viewportHeight < keyboardThreshold) {
+        // Tastiera probabile
+        debugLog(`Tastiera rilevata (fallback): ${viewportHeight}px vs ${initialHeight}px threshold`);
+        
+        if (elements.chatWrapper) {
+          const inputHeight = elements.chatInput ? elements.chatInput.offsetHeight + 40 : 70;
+          const availableHeight = viewportHeight - inputHeight - 20;
+          
+          // Regola altezza chat
+          if (elements.chatMessages) {
+            elements.chatMessages.style.height = `${availableHeight}px`;
+          }
+        }
+        // Scorri in fondo per vedere i messaggi più recenti
+        smoothScrollToBottom(true);
+      } else {
+        // Tastiera chiusa
+        adjustChatLayout();
       }
     }
     
@@ -238,7 +392,7 @@
       
       debugLog('Layout chat inizializzato');
     }
-  
+    
     /**
      * Adatta il layout della chat in base alle dimensioni della finestra
      * Versione migliorata con supporto per notch e home indicators
@@ -320,13 +474,344 @@
       elements.connectionStatus = document.getElementById('connection-status');
       elements.connectionMessage = document.getElementById('connection-message');
       elements.reconnectButton = document.getElementById('reconnect-button');
-      elements.startInstruction = document.querySelector('.start-instruction');
+      elements.startInstruction = document.getElementById('start-instruction');
+      elements.menuButton = document.getElementById('menu-button');
+      elements.menuDropdown = document.getElementById('menu-dropdown');
       
       // Log per verificare lo stato degli elementi di marketing
       if (elements.marketingSection) {
         debugLog(`Sezione marketing trovata, classe: ${elements.marketingSection.className}`);
       } else {
         debugLog('ERRORE: Sezione marketing non trovata nel DOM');
+      }
+    }
+    
+    /**
+     * Verifica che gli elementi DOM essenziali esistano
+     */
+    function elementsExist() {
+      const exists = elements.chatMessages && 
+             elements.chatForm && 
+             elements.chatInput;
+      
+      if (!exists) {
+        debugLog('ERRORE: Elementi DOM essenziali mancanti');
+      }
+      
+      return exists;
+    }
+  
+    /**
+     * Impostazione degli event listener
+     */
+    function setupEventListeners() {
+      debugLog('Configurazione event listener...');
+      
+      // Form di invio messaggio
+      if (elements.chatForm) {
+        elements.chatForm.addEventListener('submit', handleSubmitMessage);
+        debugLog('Event listener per form impostato');
+      }
+      
+      // Input del messaggio
+      if (elements.chatInput) {
+        elements.chatInput.addEventListener('input', resetInactivityTimer);
+        
+        // Attiva la chat quando l'utente inizia a digitare
+        elements.chatInput.addEventListener('input', (e) => {
+          if (!hasUserInteracted && e.target.value.trim().length > 0) {
+            debugLog('Utente ha iniziato a digitare, attivo chat');
+            markUserInteraction();
+            activateChatAndStartConversation();
+          }
+          console.log('input rilevato')
+        });
+        
+        elements.chatInput.addEventListener('keydown', (e) => {
+          // Invia messaggio con Enter (ma non con Shift+Enter)
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            
+            // Segna l'interazione utente
+            markUserInteraction();
+            
+            if (elements.chatForm) {
+              elements.chatForm.dispatchEvent(new Event('submit'));
+            }
+          }
+          
+          // Con Shift+Enter aggiungi una nuova riga (come in ChatGPT)
+          if (e.key === 'Enter' && e.shiftKey) {
+            // Nessuna azione speciale, il comportamento predefinito aggiungerà una nuova riga
+            setTimeout(() => {
+              // Applica l'auto-resize dell'input dopo l'aggiunta della nuova riga
+              elements.chatInput.style.height = 'auto';
+              elements.chatInput.style.height = `${Math.min(elements.chatInput.scrollHeight, 120)}px`;
+            }, 0);
+          }
+        });
+        
+        // Click sull'input attiva la chat se non è già attiva
+        elements.chatInput.addEventListener('focus', () => {
+          debugLog('Utente ha cliccato sull\'input, segnalo interazione');
+          
+          // Segnala che l'utente ha interagito
+          markUserInteraction();
+          
+          // Se la chat non è attiva, attivala
+          if (!isChatActive) {
+            activateChatAndStartConversation();
+          }
+        });
+        
+        debugLog('Event listener per input impostati');
+      }
+      
+      // Bottone nuova conversazione
+      if (elements.newConversationBtn) {
+        elements.newConversationBtn.addEventListener('click', startNewConversation);
+      }
+      
+      // Cookie consent
+      if (elements.acceptCookiesBtn) {
+        elements.acceptCookiesBtn.addEventListener('click', acceptCookies);
+      }
+      
+      if (elements.rejectCookiesBtn) {
+        elements.rejectCookiesBtn.addEventListener('click', rejectCookies);
+      }
+      
+      // Selezione lingua (compatibilità con vecchio selettore)
+      if (elements.languageToggle) {
+        elements.languageToggle.addEventListener('click', toggleLanguageDropdown);
+      }
+      
+      // Click fuori dal dropdown delle lingue (compatibilità con vecchio selettore)
+      document.addEventListener('click', (e) => {
+        if (elements.languageDropdown && !e.target.closest('.language-selector')) {
+          elements.languageDropdown.classList.add('hidden');
+          if (elements.languageToggle) {
+            elements.languageToggle.setAttribute('aria-expanded', 'false');
+          }
+        }
+      });
+      
+      // Gestione della visibilità della pagina
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+  
+      // Gestione della chiusura finestra/tab
+      window.addEventListener('beforeunload', function() {
+        // Chiudi esplicitamente la connessione WebSocket
+        if (socket && socketConnected) {
+          socket.disconnect();
+        }
+      });
+      
+      // Event listener per messaggi e scorrimento - migliore UX
+      if (elements.chatMessages) {
+        elements.chatMessages.addEventListener('scroll', () => {
+          // Salva la posizione di scorrimento per ripristinarla se necessario
+          window.lastScrollPosition = elements.chatMessages.scrollTop;
+        });
+      }
+      
+      debugLog('Tutti gli event listener configurati');
+    }
+    
+    /**
+     * Segna che l'utente ha interagito con la pagina
+     */
+    function markUserInteraction() {
+      if (!hasUserInteracted) {
+        debugLog('Prima interazione utente rilevata');
+        hasUserInteracted = true;
+        
+        // Disabilita la prevenzione dell'attivazione automatica
+        preventAutoActivation = false;
+        
+        // Salva l'altezza iniziale della finestra per calcoli tastiera
+        if (typeof window.initialWindowHeight === 'undefined') {
+          window.initialWindowHeight = window.innerHeight;
+          debugLog(`Altezza iniziale finestra salvata: ${window.initialWindowHeight}px`);
+        }
+      }
+    }
+  
+    /**
+     * Inizializzazione del cookie consent
+     */
+    function initCookieConsent() {
+      if (!elements.cookieConsent) return;
+      
+      const cookiesAccepted = localStorage.getItem('cookiesAccepted');
+      if (cookiesAccepted === null) {
+        // Mostra il banner se non è stata fatta una scelta
+        elements.cookieConsent.classList.remove('hidden');
+        debugLog('Banner cookie consent mostrato');
+      } else if (cookiesAccepted === 'true') {
+        // Se i cookie sono già stati accettati, inizializza analytics
+        initAnalytics();
+      }
+    }
+  
+    /**
+     * Accettazione cookies
+     */
+    function acceptCookies() {
+      localStorage.setItem('cookiesAccepted', 'true');
+      if (elements.cookieConsent) {
+        elements.cookieConsent.classList.add('hidden');
+      }
+      
+      // Attivazione di analytics e tracking
+      initAnalytics();
+      
+      // Traccia evento
+      trackEvent('accept_cookies');
+      
+      debugLog('Cookie accettati');
+    }
+  
+    /**
+     * Rifiuto cookies
+     */
+    function rejectCookies() {
+      localStorage.setItem('cookiesAccepted', 'false');
+      if (elements.cookieConsent) {
+        elements.cookieConsent.classList.add('hidden');
+      }
+      
+      debugLog('Cookie rifiutati');
+    }
+  
+    /**
+     * Toggle del dropdown delle lingue (compatibilità con vecchio selettore)
+     */
+    function toggleLanguageDropdown() {
+      if (elements.languageDropdown) {
+        const isHidden = elements.languageDropdown.classList.toggle('hidden');
+        if (elements.languageToggle) {
+          elements.languageToggle.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+        }
+      }
+    }
+  
+    /**
+     * Attiva la modalità chat
+     */
+    function activateChat() {
+      if (isChatActive) return;
+      
+      debugLog('Attivazione modalità chat');
+      
+      // Imposta flag
+      isChatActive = true;
+      
+      // Aggiunge classe al body
+      if (elements.body) {
+        elements.body.classList.remove('chat-inactive');
+        elements.body.classList.add('chat-active');
+      }
+      
+      // Nascondi la sezione di marketing con una transizione fluida
+      if (elements.marketingSection) {
+        debugLog('Nascondo sezione marketing con transizione');
+        elements.marketingSection.classList.add('fade-out');
+        
+        // Dopo l'animazione, nascondi completamente
+        setTimeout(() => {
+          elements.marketingSection.classList.add('hidden');
+          debugLog('Sezione marketing completamente nascosta');
+          
+          // Regola layout dopo che marketing è nascosto
+          adjustChatLayout();
+        }, 350); // Tempo ottimizzato per la transizione
+      } else {
+        debugLog('ERRORE: Impossibile trovare sezione marketing');
+      }
+      
+      // Nascondi il testo di istruzione
+      if (elements.startInstruction) {
+        elements.startInstruction.classList.add('fade-out');
+        
+        // Dopo l'animazione, nascondi completamente
+        setTimeout(() => {
+          elements.startInstruction.classList.add('hidden');
+        }, 350);
+      }
+      
+      // Salva lo stato in localStorage
+      try {
+        localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify({
+          isChatActive: true
+        }));
+      } catch (e) {
+        debugLog(`Errore nel salvare lo stato: ${e.message}`);
+      }
+      
+      // Focus sull'input con timing ottimizzato
+      if (elements.chatInput) {
+        setTimeout(() => {
+          elements.chatInput.focus();
+          
+          // Fornisci feedback tattile su dispositivi che lo supportano
+          if (window.navigator && window.navigator.vibrate) {
+            try {
+              window.navigator.vibrate(50); // Vibrazione sottile
+            } catch (e) {
+              // Ignora errori, la vibrazione è solo un miglioramento
+            }
+          }
+        }, 450); // Tempo aumentato per sincronizzarsi meglio con le animazioni
+      }
+    }
+    
+    /**
+     * Attiva la chat e avvia la conversazione
+     */
+    function activateChatAndStartConversation() {
+      // Verifica che l'utente abbia interagito
+      if (!hasUserInteracted) {
+        debugLog('BLOCCO: Tentativo di attivare chat senza interazione utente');
+        return;
+      }
+      
+      debugLog('Attivazione chat e avvio conversazione in seguito a interazione utente');
+      
+      // Attiva la UI della chat
+      activateChat();
+      
+      // Se la conversazione non è già stata avviata, avviala
+      if (!isConversationStarted) {
+        isConversationStarted = true;
+        
+        debugLog('Prima attivazione della conversazione');
+        
+        // Se abbiamo già i dati di una conversazione dal server, mostriamoli
+        if (conversationState.exists && conversationState.messages.length > 0) {
+          debugLog(`Ripristino conversazione esistente con ${conversationState.messages.length} messaggi`);
+          
+          // Mostra messaggi esistenti senza animazione
+          conversationState.messages.forEach(msg => {
+            if (msg.role === 'user') {
+              addUserMessage(msg.content);
+            } else if (msg.role === 'assistant') {
+              addAssistantMessage(msg.content, false); // false = non animare i messaggi caricati
+            }
+          });
+          
+          // Se la conversazione è terminata, mostra il pulsante di conferma
+          if (!conversationState.isActive && conversationState.collectedData) {
+            addConfirmationButton();
+          }
+          
+          // Scorrimento automatico in fondo
+          smoothScrollToBottom();
+        } else {
+          // Altrimenti avvia una nuova conversazione
+          debugLog('Nessuna conversazione esistente, ne avvio una nuova');
+          startConversation();
+        }
       }
     }
     
@@ -569,7 +1054,7 @@
           }
           
           // Scorrimento automatico in fondo
-          scrollToBottom();
+          smoothScrollToBottom();
         }
       } else if (!data.exists && isConversationStarted && hasUserInteracted) {
         // Se non esiste ancora una conversazione ma l'utente ha interagito, iniziane una nuova
@@ -597,7 +1082,13 @@
         messageElement = createMessageElement('assistant', '');
         messageElement.classList.add('message-new'); // Classe per evidenziare nuovi messaggi
         if (elements.chatMessages) {
+          // Aggiungi l'elemento al DOM
           elements.chatMessages.appendChild(messageElement);
+          
+          // Piccolo ritardo per garantire che l'animazione di entrata sia fluida
+          setTimeout(() => {
+            messageElement.classList.add('message-visible');
+          }, 10);
         }
       }
       
@@ -615,28 +1106,26 @@
         if (messageTextElement) {
           if (data.message) {
             // Se c'è un messaggio completo, usalo direttamente
+            const currentContent = messageTextElement.innerHTML;
             messageTextElement.innerHTML = formatMessage(data.message);
+            
+            // Evidenzia le parti nuove
+            highlightNewContent(messageTextElement, currentContent, data.message);
           } else {
-            // Altrimenti aggiungi solo il chunk con effetto digitazione
+            // Crea un elemento per il nuovo carattere con highlighting
+            const span = document.createElement('span');
+            span.className = 'highlight-char';
+            span.textContent = data.chunk;
+            
+            // Se è HTML formattato, aggiorniamo l'interno HTML
             const currentContent = messageTextElement.innerHTML;
             const newContent = formatMessage(currentContent + data.chunk);
             messageTextElement.innerHTML = newContent;
             
-            // Evidenzia l'ultimo carattere aggiunto (effetto ChatGPT)
-            const tempSpan = document.createElement('span');
-            tempSpan.className = 'highlight-text';
-            tempSpan.textContent = data.chunk.charAt(data.chunk.length - 1);
-            
-            // Rimuovi eventuali span residui (cleanup)
-            const oldHighlights = messageTextElement.querySelectorAll('.highlight-text');
-            oldHighlights.forEach(el => {
-              el.outerHTML = el.textContent;
-            });
-          }
-          
-          // Scorrimento fluido mentre il messaggio cresce
-          if (isScrolledToBottom()) {
-            scrollToBottom(true); // true = smooth scrolling
+            // Scorrimento fluido mentre il messaggio cresce
+            if (isScrolledToBottom(20)) { // 20px threshold
+              smoothScrollToBottom();
+            }
           }
         }
       }
@@ -651,7 +1140,7 @@
         }
         
         // Mantieni traccia del messaggio completo
-        const messageContent = data.message || messageTextElement.textContent;
+        const messageContent = data.message || (messageTextElement ? messageTextElement.textContent : '');
         
         // Aggiorna lo stato della conversazione
         conversationState.messages.push({ role: 'assistant', content: messageContent });
@@ -690,416 +1179,28 @@
         retryCount = 0;
         
         // Scrolling automatico al completamento
-        scrollToBottom();
+        smoothScrollToBottom();
         
         // Traccia evento
         trackEvent('message_received');
       }
     }
-  
-    /**
-     * Verifica che gli elementi DOM essenziali esistano
-     */
-    function elementsExist() {
-      const exists = elements.chatMessages && 
-             elements.chatForm && 
-             elements.chatInput;
-      
-      if (!exists) {
-        debugLog('ERRORE: Elementi DOM essenziali mancanti');
-      }
-      
-      return exists;
-    }
-  
-    /**
-     * Impostazione degli event listener
-     */
-    function setupEventListeners() {
-      debugLog('Configurazione event listener...');
-      
-      // Form di invio messaggio
-      if (elements.chatForm) {
-        elements.chatForm.addEventListener('submit', handleSubmitMessage);
-        debugLog('Event listener per form impostato');
-      }
-      
-      // Input del messaggio
-      if (elements.chatInput) {
-        elements.chatInput.addEventListener('input', resetInactivityTimer);
-        
-        // Attiva la chat quando l'utente inizia a digitare
-        elements.chatInput.addEventListener('input', (e) => {
-          if (!hasUserInteracted && e.target.value.trim().length > 0) {
-            debugLog('Utente ha iniziato a digitare, attivo chat');
-            markUserInteraction();
-            activateChatAndStartConversation();
-          }
-        });
-        
-        elements.chatInput.addEventListener('keydown', (e) => {
-          // Invia messaggio con Enter (ma non con Shift+Enter)
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            
-            // Segna l'interazione utente
-            markUserInteraction();
-            
-            if (elements.chatForm) {
-              elements.chatForm.dispatchEvent(new Event('submit'));
-            }
-          }
-          
-          // Con Shift+Enter aggiungi una nuova riga (come in ChatGPT)
-          if (e.key === 'Enter' && e.shiftKey) {
-            // Nessuna azione speciale, il comportamento predefinito aggiungerà una nuova riga
-            setTimeout(() => {
-              // Applica l'auto-resize dell'input dopo l'aggiunta della nuova riga
-              elements.chatInput.style.height = 'auto';
-              elements.chatInput.style.height = `${Math.min(elements.chatInput.scrollHeight, 120)}px`;
-            }, 0);
-          }
-        });
-        
-        // Click sull'input attiva la chat se non è già attiva
-        elements.chatInput.addEventListener('focus', () => {
-          debugLog('Utente ha cliccato sull\'input, segnalo interazione');
-          
-          // Segnala che l'utente ha interagito
-          markUserInteraction();
-          
-          // Se la chat non è attiva, attivala
-          if (!isChatActive) {
-            activateChatAndStartConversation();
-          }
-        });
-        
-        debugLog('Event listener per input impostati');
-      }
-      
-      // Bottone nuova conversazione
-      if (elements.newConversationBtn) {
-        elements.newConversationBtn.addEventListener('click', startNewConversation);
-      }
-      
-      // Cookie consent
-      if (elements.acceptCookiesBtn) {
-        elements.acceptCookiesBtn.addEventListener('click', acceptCookies);
-      }
-      
-      if (elements.rejectCookiesBtn) {
-        elements.rejectCookiesBtn.addEventListener('click', rejectCookies);
-      }
-      
-      // Selezione lingua
-      if (elements.languageToggle) {
-        elements.languageToggle.addEventListener('click', toggleLanguageDropdown);
-      }
-      
-      // Click fuori dal dropdown delle lingue
-      document.addEventListener('click', (e) => {
-        if (elements.languageDropdown && !e.target.closest('.language-selector')) {
-          elements.languageDropdown.classList.add('hidden');
-          if (elements.languageToggle) {
-            elements.languageToggle.setAttribute('aria-expanded', 'false');
-          }
-        }
-      });
-      
-      // Gestione della visibilità della pagina
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-  
-      // Gestione della chiusura finestra/tab
-      window.addEventListener('beforeunload', function() {
-        // Chiudi esplicitamente la connessione WebSocket
-        if (socket && socketConnected) {
-          socket.disconnect();
-        }
-      });
-      
-      // Event listener per messaggi e scorrimento - migliore UX
-      if (elements.chatMessages) {
-        elements.chatMessages.addEventListener('scroll', () => {
-          // Salva la posizione di scorrimento per ripristinarla se necessario
-          window.lastScrollPosition = elements.chatMessages.scrollTop;
-        });
-      }
-      
-      debugLog('Tutti gli event listener configurati');
-    }
     
     /**
-     * Funzione per gestire il viewport visibile (versione migliorata)
+     * Evidenzia le nuove parti del contenuto
      */
-    function handleVisualViewportResize() {
-      if (!elements.chatWrapper || !elements.chatMessages || !elements.chatInput) return;
+    function highlightNewContent(element, oldContent, newContent) {
+      if (!element || !oldContent || !newContent) return;
       
-      // Utilizza l'API visualViewport per rilevare accuratamente la dimensione dello schermo con tastiera
-      const viewportHeight = window.visualViewport.height;
-      const windowHeight = window.innerHeight;
-      
-      // Rileva se la tastiera è aperta (dinamicamente rispetto alle dimensioni del dispositivo)
-      // Consideriamo che se la viewport è ridotta di >20%, probabilmente la tastiera è aperta
-      const keyboardOpen = viewportHeight < windowHeight * 0.8;
-      
-      if (keyboardOpen) {
-        debugLog(`Tastiera rilevata: viewport ${viewportHeight}px vs window ${windowHeight}px`);
-        
-        // Adatta i componenti all'apertura della tastiera
-        const inputHeight = elements.chatInput.offsetHeight + 40; // Spazio aggiuntivo per il container
-        const availableHeight = viewportHeight - inputHeight;
-        
-        // Regola altezza chat e scorri per mostrare input
-        elements.chatMessages.style.height = `${availableHeight}px`;
-        
-        // Scorri per assicurarti che l'input sia visibile
-        window.scrollTo(0, window.visualViewport.offsetTop);
-        
-        // Verifica se l'input è sullo schermo, altrimenti scorri
-        const inputRect = elements.chatInput.getBoundingClientRect();
-        if (inputRect.bottom > viewportHeight) {
-          window.scrollTo({
-            top: window.scrollY + (inputRect.bottom - viewportHeight) + 20,
-            behavior: 'smooth'
-          });
-        }
-      } else {
-        // Quando la tastiera è chiusa, ripristina le altezze normali
-        adjustChatLayout();
-      }
-    }
-    
-    /**
-     * Gestione della tastiera mobile fallback per browser più vecchi
-     */
-    function handleMobileResize() {
-      if (!APP_CONFIG.IS_MOBILE) return;
-      
-      const viewportHeight = window.innerHeight;
-      const initialHeight = window.initialWindowHeight || window.innerHeight;
-      
-      // Calcola una soglia dinamica basata sull'altezza iniziale della finestra
-      const thresholdRatio = 0.75; // 75% dell'altezza originale
-      const keyboardThreshold = initialHeight * thresholdRatio;
-      
-      if (viewportHeight < keyboardThreshold) {
-        // Tastiera probabile
-        debugLog(`Tastiera rilevata (fallback): ${viewportHeight}px vs ${initialHeight}px threshold`);
-        
-        if (elements.chatWrapper) {
-          const inputHeight = elements.chatInput ? elements.chatInput.offsetHeight + 40 : 70;
-          const availableHeight = viewportHeight - inputHeight - 20;
-          
-          // Regola altezza chat
-          if (elements.chatMessages) {
-            elements.chatMessages.style.height = `${availableHeight}px`;
-          }
-        }
-        // Scorri in fondo per vedere i messaggi più recenti
-        scrollToBottom(true);
-      } else {
-        // Tastiera chiusa
-        adjustChatLayout();
-      }
-    }
-    
-    /**
-     * Segna che l'utente ha interagito con la pagina
-     */
-    function markUserInteraction() {
-      if (!hasUserInteracted) {
-        debugLog('Prima interazione utente rilevata');
-        hasUserInteracted = true;
-        
-        // Disabilita la prevenzione dell'attivazione automatica
-        preventAutoActivation = false;
-        
-        // Salva l'altezza iniziale della finestra per calcoli tastiera
-        if (typeof window.initialWindowHeight === 'undefined') {
-          window.initialWindowHeight = window.innerHeight;
-          debugLog(`Altezza iniziale finestra salvata: ${window.initialWindowHeight}px`);
-        }
-      }
-    }
-  
-    /**
-     * Inizializzazione del cookie consent
-     */
-    function initCookieConsent() {
-      if (!elements.cookieConsent) return;
-      
-      const cookiesAccepted = localStorage.getItem('cookiesAccepted');
-      if (cookiesAccepted === null) {
-        // Mostra il banner se non è stata fatta una scelta
-        elements.cookieConsent.classList.remove('hidden');
-        debugLog('Banner cookie consent mostrato');
-      } else if (cookiesAccepted === 'true') {
-        // Se i cookie sono già stati accettati, inizializza analytics
-        initAnalytics();
-      }
-    }
-  
-    /**
-     * Accettazione cookies
-     */
-    function acceptCookies() {
-      localStorage.setItem('cookiesAccepted', 'true');
-      if (elements.cookieConsent) {
-        elements.cookieConsent.classList.add('hidden');
-      }
-      
-      // Attivazione di analytics e tracking
-      initAnalytics();
-      
-      // Traccia evento
-      trackEvent('accept_cookies');
-      
-      debugLog('Cookie accettati');
-    }
-  
-    /**
-     * Rifiuto cookies
-     */
-    function rejectCookies() {
-      localStorage.setItem('cookiesAccepted', 'false');
-      if (elements.cookieConsent) {
-        elements.cookieConsent.classList.add('hidden');
-      }
-      
-      debugLog('Cookie rifiutati');
-    }
-  
-    /**
-     * Toggle del dropdown delle lingue
-     */
-    function toggleLanguageDropdown() {
-      if (elements.languageDropdown) {
-        const isHidden = elements.languageDropdown.classList.toggle('hidden');
-        if (elements.languageToggle) {
-          elements.languageToggle.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
-        }
-      }
-    }
-  
-    /**
-     * Attiva la modalità chat
-     */
-    function activateChat() {
-      if (isChatActive) return;
-      
-      debugLog('Attivazione modalità chat');
-      
-      // Imposta flag
-      isChatActive = true;
-      
-      // Aggiunge classe al body
-      if (elements.body) {
-        elements.body.classList.remove('chat-inactive');
-        elements.body.classList.add('chat-active');
-      }
-      
-      // Nascondi la sezione di marketing con una transizione fluida
-      if (elements.marketingSection) {
-        debugLog('Nascondo sezione marketing con transizione');
-        elements.marketingSection.classList.add('fade-out');
-        
-        // Dopo l'animazione, nascondi completamente
+      // Implementazione semplice: evidenzia solo se il contenuto è significativamente diverso
+      if (newContent.length - oldContent.length > 10) {
+        element.classList.add('highlight-new');
         setTimeout(() => {
-          elements.marketingSection.classList.add('hidden');
-          debugLog('Sezione marketing completamente nascosta');
-          
-          // Regola layout dopo che marketing è nascosto
-          adjustChatLayout();
-        }, 300); // Tempo ridotto per una transizione più veloce
-      } else {
-        debugLog('ERRORE: Impossibile trovare sezione marketing');
-      }
-      
-      // Nascondi il testo di istruzione
-      if (elements.startInstruction) {
-        elements.startInstruction.classList.add('fade-out');
-        
-        // Dopo l'animazione, nascondi completamente
-        setTimeout(() => {
-          elements.startInstruction.classList.add('hidden');
-        }, 300);
-      }
-      
-      // Salva lo stato in localStorage
-      try {
-        localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify({
-          isChatActive: true
-        }));
-      } catch (e) {
-        debugLog(`Errore nel salvare lo stato: ${e.message}`);
-      }
-      
-      // Focus sull'input
-      if (elements.chatInput) {
-        setTimeout(() => {
-          elements.chatInput.focus();
-          
-          // Fornisci feedback tattile su dispositivi che lo supportano
-          if (window.navigator && window.navigator.vibrate) {
-            try {
-              window.navigator.vibrate(50); // Vibrazione sottile
-            } catch (e) {
-              // Ignora errori, la vibrazione è solo un miglioramento
-            }
-          }
-        }, 400); // Tempo aumentato per consentire il completamento dell'animazione
+          element.classList.remove('highlight-new');
+        }, 800);
       }
     }
     
-    /**
-     * Attiva la chat e avvia la conversazione
-     */
-    function activateChatAndStartConversation() {
-      // Verifica che l'utente abbia interagito
-      if (!hasUserInteracted) {
-        debugLog('BLOCCO: Tentativo di attivare chat senza interazione utente');
-        return;
-      }
-      
-      debugLog('Attivazione chat e avvio conversazione in seguito a interazione utente');
-      
-      // Attiva la UI della chat
-      activateChat();
-      
-      // Se la conversazione non è già stata avviata, avviala
-      if (!isConversationStarted) {
-        isConversationStarted = true;
-        
-        debugLog('Prima attivazione della conversazione');
-        
-        // Se abbiamo già i dati di una conversazione dal server, mostriamoli
-        if (conversationState.exists && conversationState.messages.length > 0) {
-          debugLog(`Ripristino conversazione esistente con ${conversationState.messages.length} messaggi`);
-          
-          // Mostra messaggi esistenti senza animazione
-          conversationState.messages.forEach(msg => {
-            if (msg.role === 'user') {
-              addUserMessage(msg.content);
-            } else if (msg.role === 'assistant') {
-              addAssistantMessage(msg.content, false); // false = non animare i messaggi caricati
-            }
-          });
-          
-          // Se la conversazione è terminata, mostra il pulsante di conferma
-          if (!conversationState.isActive && conversationState.collectedData) {
-            addConfirmationButton();
-          }
-          
-          // Scorrimento automatico in fondo
-          scrollToBottom();
-        } else {
-          // Altrimenti avvia una nuova conversazione
-          debugLog('Nessuna conversazione esistente, ne avvio una nuova');
-          startConversation();
-        }
-      }
-    }
-  
     /**
      * Avvio della conversazione
      */
@@ -1182,7 +1283,7 @@
       // Traccia evento
       trackEvent('conversation_start');
     }
-  
+    
     /**
      * Invio messaggio utente - migliorato stile ChatGPT
      */
@@ -1270,15 +1371,18 @@
       if (elements.sendButton) {
         elements.sendButton.disabled = true;
         
-        // Animazione pulsante invio
+        // Animazione pulsante invio migliorata
         elements.sendButton.classList.add('sending');
         setTimeout(() => {
           elements.sendButton.classList.remove('sending');
         }, 300);
       }
       
-      // Mostra l'indicatore di digitazione
-      showTypingIndicator();
+      // Piccolo ritardo per una migliore esperienza visiva
+      setTimeout(() => {
+        // Mostra l'indicatore di digitazione
+        showTypingIndicator();
+      }, 150);
       
       try {
         // Invia il messaggio tramite socket
@@ -1292,13 +1396,10 @@
         // Traccia evento
         trackEvent('message_sent');
         
-        // Su mobile, assicurati che la vista sia posizionata correttamente
-        if (APP_CONFIG.IS_MOBILE) {
-          // Piccolo ritardo per dare tempo di aggiornare il DOM
-          setTimeout(() => {
-            scrollToBottom(true); // smooth scrolling
-          }, 100);
-        }
+        // Assicurati che la vista sia posizionata correttamente
+        setTimeout(() => {
+          smoothScrollToBottom();
+        }, 100);
       } catch (error) {
         debugLog(`Errore nell'invio del messaggio: ${error.message}`);
         handleCommunicationError();
@@ -1315,10 +1416,10 @@
         // Nascondi l'indicatore di digitazione
         hideTypingIndicator();
         isSubmitting = false;
-        scrollToBottom();
+        smoothScrollToBottom();
       }
     }
-  
+    
     /**
      * Gestione errori di comunicazione
      */
@@ -1332,7 +1433,7 @@
         retryCount = 0;
       }
     }
-  
+    
     /**
      * Aggiunta bottone di conferma
      */
@@ -1359,7 +1460,7 @@
       elements.chatMessages.appendChild(buttonContainer);
       
       // Assicurati che il bottone sia visibile scrollando in fondo
-      scrollToBottom();
+      smoothScrollToBottom();
       
       // Aggiungi una piccola animazione per attirare l'attenzione
       setTimeout(() => {
@@ -1369,7 +1470,7 @@
         }, 1500);
       }, 500);
     }
-  
+    
     /**
      * Gestione dell'invio finale
      */
@@ -1388,8 +1489,19 @@
       
       debugLog('Invio finale dei dati raccolti');
       
-      // Mostra indicatore di caricamento
-      showTypingIndicator();
+      // Mostra feedback visivo di elaborazione
+      const confirmButton = document.querySelector('.confirm-button');
+      if (confirmButton) {
+        confirmButton.disabled = true;
+        confirmButton.classList.add('processing');
+        
+        // Aggiungi lo spinner
+        const spinner = document.createElement('span');
+        spinner.className = 'spinner';
+        confirmButton.innerHTML = '';
+        confirmButton.appendChild(spinner);
+        confirmButton.appendChild(document.createTextNode(' Invio in corso...'));
+      }
       
       try {
         // Preparazione del payload
@@ -1424,36 +1536,62 @@
         if (data.success) {
           debugLog('Dati inviati con successo');
           
-          // Nascondi l'indicatore di digitazione
-          hideTypingIndicator();
+          // Feedback di successo visivo
+          if (confirmButton) {
+            confirmButton.classList.remove('processing');
+            confirmButton.classList.add('success');
+            
+            // Aggiungi l'icona di spunta
+            const checkIcon = document.createElement('span');
+            checkIcon.className = 'check-icon';
+            confirmButton.innerHTML = '';
+            confirmButton.appendChild(checkIcon);
+            confirmButton.appendChild(document.createTextNode(' Completato!'));
+          }
           
-          // Dopo un breve ritardo, mostra la schermata di ringraziamento con transizione fluida
-          setTimeout(() => {
-            if (elements.chatWrapper) {
-              elements.chatWrapper.classList.add('fade-out');
-              
-              setTimeout(() => {
-                elements.chatWrapper.classList.add('hidden');
-                if (elements.thankYouScreen) {
-                  elements.thankYouScreen.classList.add('fade-in');
-                  elements.thankYouScreen.classList.remove('hidden');
-                  
-                  // Traccia evento di conversione
-                  trackEvent('plan_requested');
+          // Ritardo per apprezzare l'animazione di successo
+          await new Promise(resolve => setTimeout(resolve, 800));
+          
+          // Transizione alla schermata di ringraziamento con scomparsa elegante
+          if (elements.chatWrapper) {
+            elements.chatWrapper.classList.add('fade-out');
+            
+            setTimeout(() => {
+              elements.chatWrapper.classList.add('hidden');
+              if (elements.thankYouScreen) {
+                // Preparazione per l'entrata animata
+                elements.thankYouScreen.classList.remove('hidden');
+                elements.thankYouScreen.classList.add('fade-in');
+                
+                // Animazione del checkmark di successo
+                const successIcon = elements.thankYouScreen.querySelector('.success-icon');
+                if (successIcon) {
+                  successIcon.classList.add('completion-success');
                 }
-              }, 300);
-            }
-          }, 300);
+                
+                // Traccia evento di conversione
+                trackEvent('plan_requested');
+              }
+            }, 400);
+          }
         } else {
           throw new Error(data.error || translations.error.generic);
         }
       } catch (error) {
         debugLog(`Errore nell'invio dei dati finali: ${error.message}`);
-        hideTypingIndicator();
+        
+        // Reimposta il pulsante
+        if (confirmButton) {
+          confirmButton.disabled = false;
+          confirmButton.classList.remove('processing');
+          confirmButton.textContent = translations.messages.confirmation;
+        }
+        
+        // Mostra messaggio di errore
         addAssistantMessage(`${translations.error.generic} ${error.message}`, true);
       }
     }
-  
+    
     /**
      * Mostra l'indicatore di digitazione - stile ChatGPT
      */
@@ -1461,9 +1599,9 @@
       if (!elements.typingIndicator) return;
       
       elements.typingIndicator.classList.remove('hidden');
-      scrollToBottom(true);
+      smoothScrollToBottom(true);
     }
-  
+    
     /**
      * Nascondi l'indicatore di digitazione
      */
@@ -1472,39 +1610,51 @@
       
       elements.typingIndicator.classList.add('hidden');
     }
-  
+    
     /**
      * Aggiunta messaggio utente - Stile ChatGPT
      */
     function addUserMessage(message) {
-        if (!elements.chatMessages) return;
+      if (!elements.chatMessages) return;
+      
+      // Log di debug
+      debugLog("Aggiungendo messaggio utente");
+      
+      // Crea l'elemento con la struttura corretta
+      const messageDiv = document.createElement('div');
+      messageDiv.classList.add('message', 'message-user');
+      
+      // Contenuto del messaggio con stile ottimizzato
+      const contentDiv = document.createElement('div');
+      contentDiv.classList.add('message-content');
+      
+      const textDiv = document.createElement('div');
+      textDiv.classList.add('message-text');
+      textDiv.textContent = message; // Usa textContent per sicurezza
+      
+      // Monta la struttura DOM
+      contentDiv.appendChild(textDiv);
+      messageDiv.appendChild(contentDiv);
+      
+      // Aggiungi al container con effetto di comparsa
+      elements.chatMessages.appendChild(messageDiv);
+      
+      // Aggiungi enfasi visiva per mostrare che è un messaggio nuovo
+      setTimeout(() => {
+        messageDiv.classList.add('message-visible');
+        smoothScrollToBottom();
         
-        // Assicurati che i messaggi siano visibili in console per debug
-        console.log("Aggiungendo messaggio utente:", message);
-        
-        // Crea l'elemento con la struttura corretta
-        const messageDiv = document.createElement('div');
-        messageDiv.classList.add('message', 'message-user');
-        
-        // Contenuto del messaggio - semplificato per debug
-        const contentDiv = document.createElement('div');
-        contentDiv.classList.add('message-content');
-        contentDiv.style.backgroundColor =  '#5b7fff'; // Use the hex code directly
-        contentDiv.style.color = 'white';
-        
-        const textDiv = document.createElement('div');
-        textDiv.classList.add('message-text');
-        textDiv.textContent = message; // Usa textContent per sicurezza
-        
-        // Monta la struttura DOM
-        contentDiv.appendChild(textDiv);
-        messageDiv.appendChild(contentDiv);
-        
-        // Aggiungi al container
-        elements.chatMessages.appendChild(messageDiv);
-        scrollToBottom();
-      }
-  
+        // Effetto sonoro sottile (opzionale)
+        if (window.navigator && window.navigator.vibrate && APP_CONFIG.IS_MOBILE) {
+          try {
+            window.navigator.vibrate(20); // Vibrazione molto leggera
+          } catch (e) {
+            // Ignora errori
+          }
+        }
+      }, 10);
+    }
+    
     /**
      * Aggiunta messaggio assistente - con opzione animazione
      * @param {string} message - Testo del messaggio
@@ -1518,40 +1668,46 @@
       elements.chatMessages.appendChild(messageElement);
       
       if (animate) {
-        // Aggiungi classe temporanea per evidenziare il nuovo messaggio
-        messageElement.classList.add('message-highlight');
+        // Animazione con enfasi visiva
         setTimeout(() => {
-          messageElement.classList.remove('message-highlight');
-        }, 1000);
+          messageElement.classList.add('message-visible');
+          
+          // Aggiungi classe temporanea per evidenziare il nuovo messaggio
+          setTimeout(() => {
+            messageElement.classList.add('message-highlight');
+            setTimeout(() => {
+              messageElement.classList.remove('message-highlight');
+            }, 1000);
+          }, 100);
+        }, 10);
       }
       
-      scrollToBottom();
+      smoothScrollToBottom();
     }
-  
+    
     /**
-     * Creazione elemento messaggio - Stile ChatGPT
+     * Creazione elemento messaggio - Stile ChatGPT migliorato
      */
-    // Replace the createMessageElement function with this version
-function createMessageElement(role, content) {
-    const messageDiv = document.createElement('div');
-    messageDiv.classList.add('message', `message-${role}`);
+    function createMessageElement(role, content) {
+      const messageDiv = document.createElement('div');
+      messageDiv.classList.add('message', `message-${role}`);
+      
+      // Bubble-style message con migliorie estetiche
+      const contentDiv = document.createElement('div');
+      contentDiv.classList.add('message-content');
+      
+      const textDiv = document.createElement('div');
+      textDiv.classList.add('message-text');
+      textDiv.innerHTML = formatMessage(content); // Formatta il messaggio per una migliore leggibilità
+      
+      contentDiv.appendChild(textDiv);
+      messageDiv.appendChild(contentDiv);
+      
+      return messageDiv;
+    }
     
-    // Basic bubble-style message
-    const contentDiv = document.createElement('div');
-    contentDiv.classList.add('message-content');
-    
-    const textDiv = document.createElement('div');
-    textDiv.classList.add('message-text');
-    textDiv.innerHTML = content; // Don't format to troubleshoot
-    
-    contentDiv.appendChild(textDiv);
-    messageDiv.appendChild(contentDiv);
-    
-    return messageDiv;
-  }
-  
     /**
-     * Formattazione messaggio (markdown semplice) - Migliorata
+     * Formattazione messaggio (markdown semplice) - Migliorata per leggibilità
      */
     function formatMessage(message) {
       if (!message) return '';
@@ -1565,10 +1721,11 @@ function createMessageElement(role, content) {
       // Formattazione italic
       formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
       
-      // Link inline
-      formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      // Link inline con stile migliorato
+      formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, 
+        '<a href="$2" target="_blank" rel="noopener noreferrer" class="message-link">$1</a>');
       
-      // Code inline
+      // Code inline con stile migliorato
       formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
       
       // Liste numerate
@@ -1584,7 +1741,7 @@ function createMessageElement(role, content) {
         if (line.startsWith('<li>')) {
           if (!inList) {
             inList = true;
-            return '<ul>' + line;
+            return '<ul class="message-list">' + line;
           }
           return line;
         } else if (inList) {
@@ -1601,89 +1758,88 @@ function createMessageElement(role, content) {
       }
       
       // Rimuovi <br> extra prima e dopo le liste
-      formatted = formatted.replace(/<br><ul>/g, '<ul>');
+      formatted = formatted.replace(/<br><ul/g, '<ul');
       formatted = formatted.replace(/<\/ul><br>/g, '</ul>');
       
       return formatted;
     }
-  
+    
     /**
      * Configura l'observer per lo scrolling automatico
      */
     function setupScrollObserver() {
       if (elements.chatMessages && !window.chatScrollObserver) {
-        // Configura l'observer per monitorare aggiunte di nodi (nuovi messaggi)
-        window.chatScrollObserver = new MutationObserver((mutations) => {
-          let shouldScroll = false;
-          const containerHeight = elements.chatMessages.clientHeight;
-          const containerScrollHeight = elements.chatMessages.scrollHeight;
-          const currentScrollPosition = elements.chatMessages.scrollTop;
-          
-          // Più intelligente: calcola percentuale di scorrimento
-          const scrollPercentage = (currentScrollPosition + containerHeight) / containerScrollHeight;
-          
-          // Siamo vicini al fondo se siamo oltre il 90% di scorrimento
-          const isNearBottom = scrollPercentage > 0.9;
-          
-          // Verifica se sono stati aggiunti nuovi messaggi
-          for (const mutation of mutations) {
-            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-              // Controlla se i nuovi nodi sono messaggi dell'utente o dell'assistente
-              for (const node of mutation.addedNodes) {
-                if (node.classList && (
-                    node.classList.contains('message-user') || 
-                    (node.classList.contains('message-assistant') && isNearBottom) ||
-                    node.classList.contains('confirmation-container')
-                   )) {
-                  shouldScroll = true;
-                  break;
+        try {
+          // Configura l'observer per monitorare aggiunte di nodi (nuovi messaggi)
+          window.chatScrollObserver = new MutationObserver((mutations) => {
+            let shouldScroll = false;
+            const containerHeight = elements.chatMessages.clientHeight;
+            const containerScrollHeight = elements.chatMessages.scrollHeight;
+            const currentScrollPosition = elements.chatMessages.scrollTop;
+            
+            // Più intelligente: calcola percentuale di scorrimento
+            const scrollPercentage = (currentScrollPosition + containerHeight) / containerScrollHeight;
+            
+            // Siamo vicini al fondo se siamo oltre il 90% di scorrimento
+            const isNearBottom = scrollPercentage > 0.9;
+            
+            // Verifica se sono stati aggiunti nuovi messaggi
+            for (const mutation of mutations) {
+              if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                // Controlla se i nuovi nodi sono messaggi dell'utente o dell'assistente
+                for (const node of mutation.addedNodes) {
+                  if (node.classList && (
+                      node.classList.contains('message-user') || 
+                      (node.classList.contains('message-assistant') && isNearBottom) ||
+                      node.classList.contains('confirmation-container')
+                     )) {
+                    shouldScroll = true;
+                    break;
+                  }
                 }
               }
             }
-          }
+            
+            // Scorri solo se necessario
+            if (shouldScroll) {
+              smoothScrollToBottom(true); // smooth scroll
+            }
+          });
           
-          // Scorri solo se necessario
-          if (shouldScroll) {
-            scrollToBottom(true); // smooth scroll
-          }
-        });
-        
-        // Osserva modifiche al DOM
-        window.chatScrollObserver.observe(elements.chatMessages, {
-          childList: true,
-          subtree: false,
-          characterData: false
-        });
+          // Osserva modifiche al DOM
+          window.chatScrollObserver.observe(elements.chatMessages, {
+            childList: true,
+            subtree: false,
+            characterData: false
+          });
+        } catch (e) {
+          // Fallback per browser che non supportano MutationObserver
+          debugLog(`Errore nel configurare MutationObserver: ${e.message}`);
+        }
         
         // Aggiungi anche un listener per il resize della finestra
         window.addEventListener('resize', () => {
           if (isScrolledToBottom()) {
-            scrollToBottom();
+            smoothScrollToBottom();
           }
         });
       }
     }
-  
+    
     /**
      * Verifica se siamo già scrollati in fondo
      */
-    function isScrolledToBottom() {
+    function isScrolledToBottom(threshold = 40) {
       if (!elements.chatMessages) return true;
       
       const containerHeight = elements.chatMessages.clientHeight;
       const containerScrollHeight = elements.chatMessages.scrollHeight;
       const currentScrollPosition = elements.chatMessages.scrollTop;
       
-      // Vicini al fondo se siamo a meno di 100px o 95% scrollati
-      const pixelThreshold = 100;
-      const percentageThreshold = 0.95;
-      
-      const pixelToBottom = containerScrollHeight - currentScrollPosition - containerHeight;
-      const scrollPercentage = (currentScrollPosition + containerHeight) / containerScrollHeight;
-      
-      return pixelToBottom < pixelThreshold || scrollPercentage > percentageThreshold;
+      // Considerato "al fondo" se mancano meno di 'threshold' pixels
+      return containerScrollHeight - currentScrollPosition - containerHeight < threshold;
     }
-  
+    
     /**
      * Handler per lo scroll manuale dell'utente
      */
@@ -1706,9 +1862,31 @@ function createMessageElement(role, content) {
         window.manualScrollHandlerSet = true;
       }
     }
-  
+    
     /**
-     * Scorrimento in fondo alla chat - ChatGPT-style scrolling
+     * Scorri fluido alla parte inferiore della chat
+     * @param {boolean} smooth - Se true, usa animazione fluida
+     */
+    function smoothScrollToBottom(smooth = false) {
+      if (!elements.chatMessages) return;
+      
+      // Usa requestAnimationFrame per fluidità se disponibile
+      if (window.requestAnimationFrame) {
+        requestAnimationFrame(() => {
+          const behavior = smooth && !APP_CONFIG.IS_MOBILE ? 'smooth' : 'auto';
+          elements.chatMessages.scrollTo({
+            top: elements.chatMessages.scrollHeight,
+            behavior: behavior
+          });
+        });
+      } else {
+        // Fallback per browser più vecchi
+        scrollToBottom(smooth);
+      }
+    }
+    
+    /**
+     * Scorrimento in fondo alla chat - Fallback tradizionale
      * @param {boolean} smooth - Se true, usa animazione fluida
      */
     function scrollToBottom(smooth = false) {
@@ -1723,18 +1901,23 @@ function createMessageElement(role, content) {
       const lastElement = messages[messages.length - 1];
       
       // Scorri all'ultimo elemento con la behavior specificata
-      lastElement.scrollIntoView({ 
-        behavior: behavior, 
-        block: 'end' 
-      });
+      try {
+        lastElement.scrollIntoView({ 
+          behavior: behavior, 
+          block: 'end' 
+        });
+      } catch (e) {
+        // Fallback per browser più vecchi
+        elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+      }
       
       // Assicura che lo scroll raggiunga effettivamente il fondo
       // Utile soprattutto su Safari iOS
-      
+      setTimeout(() => {
         elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
-      
+      }, 10);
     }
-  
+    
     /**
      * Timer di inattività
      */
@@ -1749,7 +1932,7 @@ function createMessageElement(role, content) {
         handleInactivity();
       }, APP_CONFIG.INACTIVITY_TIMEOUT);
     }
-  
+    
     /**
      * Gestione inattività
      */
@@ -1759,7 +1942,7 @@ function createMessageElement(role, content) {
         addAssistantMessage(translations.messages.timeout, true);
       }
     }
-  
+    
     /**
      * Gestione visibilità pagina
      */
@@ -1790,7 +1973,7 @@ function createMessageElement(role, content) {
         }, 15 * 60 * 1000); // 15 minuti con pagina nascosta
       }
     }
-  
+    
     /**
      * Nuova conversazione
      */
@@ -1870,7 +2053,7 @@ function createMessageElement(role, content) {
         elements.sendButton.disabled = false;
       }
     }
-  
+    
     /**
      * Analytics
      */
@@ -1888,16 +2071,7 @@ function createMessageElement(role, content) {
         debugLog('Meta Pixel attivato');
       }
     }
-  
-    /**
-     * Logging
-     */
-    function log(message) {
-      if (APP_CONFIG.DEBUG) {
-        debugLog(message);
-      }
-    }
-  
+    
     /**
      * Registrazione di eventi per analytics
      */
@@ -1917,7 +2091,7 @@ function createMessageElement(role, content) {
         window.fbq('track', eventName, params);
       }
     }
-  
+    
     // Esponi funzioni pubbliche tramite l'API globale
     window.dietingWithJoe = {
       init: init,
