@@ -2,7 +2,7 @@
 <html lang="<%= currentLang %>">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>DietingWithJoe - <%= t('app.subtitle') %></title>
   <meta name="description" content="<%= t('app.description') %>">
   
@@ -13,7 +13,7 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
   <!-- App CSS -->
   <link rel="stylesheet" href="/css/style.css">
@@ -42,9 +42,6 @@
     t.src=v;s=b.getElementsByTagName(e)[0];
     s.parentNode.insertBefore(t,s)}(window, document,'script',
     'https://connect.facebook.net/en_US/fbevents.js');
-    // Inizializzazione commentata per evitare errori con ID non valido
-    // fbq('init', '<%= process.env.META_PIXEL_ID %>');
-    // fbq('track', 'PageView');
   </script>
   <% } %>
   
@@ -71,7 +68,7 @@
     };
   </script>
 </head>
-<body>
+<body class="chat-inactive">
   <!-- Cookie Consent Banner -->
   <div id="cookie-consent" class="cookie-banner hidden" aria-live="polite">
     <div class="cookie-content">
@@ -84,117 +81,118 @@
     </div>
   </div>
 
-  <!-- Language Selector -->
-  <div class="language-selector" role="navigation" aria-label="<%= t('language.selector') %>">
-    <button class="language-toggle" aria-haspopup="true" aria-expanded="false">
-      <span class="current-lang"><%= currentLang.toUpperCase() %></span>
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="language-icon"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path><line x1="2" y1="12" x2="22" y2="12"></line></svg>
-    </button>
-    <div class="language-dropdown hidden" role="menu">
-      <a href="/changelanguage/it?redirect=/" role="menuitem" class="<%= currentLang === 'it' ? 'active' : '' %>" lang="it">Italiano</a>
-      <a href="/changelanguage/en?redirect=/" role="menuitem" class="<%= currentLang === 'en' ? 'active' : '' %>" lang="en">English</a>
-      <a href="/changelanguage/fr?redirect=/" role="menuitem" class="<%= currentLang === 'fr' ? 'active' : '' %>" lang="fr">Français</a>
-      <a href="/changelanguage/es?redirect=/" role="menuitem" class="<%= currentLang === 'es' ? 'active' : '' %>" lang="es">Español</a>
-      <a href="/changelanguage/de?redirect=/" role="menuitem" class="<%= currentLang === 'de' ? 'active' : '' %>" lang="de">Deutsch</a>
-      <a href="/changelanguage/pt?redirect=/" role="menuitem" class="<%= currentLang === 'pt' ? 'active' : '' %>" lang="pt">Português</a>
-    </div>
-  </div>
-
-  <header>
-    <div class="container">
-      <a href="/" class="app-title">JOE</a>
-      <p class="subtitle"><%= t('app.subtitle') %></p>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="brand">DietingWithJoe</div>
+    <div class="header-actions">
+      <!-- <div class="language-menu">
+        <button id="language-btn" aria-label="<%= t('language.selector') %>">
+          <%= currentLang.toUpperCase() %> <span class="chevron-down">▼</span>
+        </button>
+        <div class="language-dropdown hidden">
+          <a href="/changelanguage/it?redirect=/" role="menuitem" class="<%= currentLang === 'it' ? 'active' : '' %>" lang="it">Italiano</a>
+          <a href="/changelanguage/en?redirect=/" role="menuitem" class="<%= currentLang === 'en' ? 'active' : '' %>" lang="en">English</a>
+          <a href="/changelanguage/fr?redirect=/" role="menuitem" class="<%= currentLang === 'fr' ? 'active' : '' %>" lang="fr">Français</a>
+          <a href="/changelanguage/es?redirect=/" role="menuitem" class="<%= currentLang === 'es' ? 'active' : '' %>" lang="es">Español</a>
+          <a href="/changelanguage/de?redirect=/" role="menuitem" class="<%= currentLang === 'de' ? 'active' : '' %>" lang="de">Deutsch</a>
+          <a href="/changelanguage/pt?redirect=/" role="menuitem" class="<%= currentLang === 'pt' ? 'active' : '' %>" lang="pt">Português</a>
+        </div>
+      </div> -->
+      <button id="menu-btn" aria-label="<%= t('menu.label', 'Menu') %>">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+      </button>
+      <div id="menu-dropdown" class="menu-dropdown hidden">
+        <a href="/privacy" role="menuitem"><%= t('footer.privacy') %></a>
+        <a href="/terms" role="menuitem"><%= t('footer.terms') %></a>
+        <a href="/contact" role="menuitem"><%= t('footer.contact') %></a>
+      </div>
     </div>
   </header>
-
-  <main class="container">
-    <!-- Connection Status -->
-    <div id="connection-status" class="hidden">
-      <div class="alert alert-warning">
-        <span id="connection-message"><%= t('messages.connecting') %></span>
-        <button id="reconnect-button" class="btn btn-sm btn-primary"><%= t('messages.reconnect') %></button>
+  
+  <!-- Connection Status -->
+  <div id="connection-status" class="connection-status hidden">
+    <span id="connection-message"><%= t('messages.connecting') %></span>
+    <button id="reconnect-button" class="btn btn-sm btn-primary"><%= t('messages.reconnect') %></button>
+  </div>
+  
+  <main class="app-container">
+    <!-- Marketing Section -->
+    <section id="marketing-section" class="marketing-section">
+      <h1 class="brand-logo">JOE</h1>
+      <p class="brand-tagline"><%= t('app.subtitle') %></p>
+      
+      <div class="benefits">
+        <div class="benefit-item">
+          <div class="benefit-icon primary">1</div>
+          <div class="benefit-text"><%= t('benefits.first', 'Piano alimentare personalizzato') %></div>
+        </div>
+        
+        <div class="benefit-item">
+          <div class="benefit-icon secondary">2</div>
+          <div class="benefit-text"><%= t('benefits.second', 'Consigli nutrizionali su misura') %></div>
+        </div>
+        
+        <div class="benefit-item">
+          <div class="benefit-icon accent">3</div>
+          <div class="benefit-text"><%= t('benefits.third', 'Risultati in poche settimane') %></div>
+        </div>
       </div>
+      <div class="start-instruction">
+        <button id="start-chat-button" class="btn btn-primary large">Parla con Joe</button>
+      </div>
+      <div class="trust-indicators">
+        <%= t('marketing.trust', 'Usato da oltre 10.000 persone • 4.8/5 soddisfazione') %>
+      </div>
+    </section>
+    
+      
+
+
+
+
+
+   <!-- <p id="start-instruction" class="start-instruction"><%= t('chat.start_instruction', 'Inizia a scrivere per parlare con Joe...') %></p> -->
+
+    <!-- Chat Interface -->
+    <div id="chat-container" class="chat-container">
+      <div id="chat-messages" class="messages-container" tabindex="0" role="log" aria-label="<%= t('chat.conversation') %>">
+        <!-- I messaggi verranno aggiunti dinamicamente qui -->
+
+        <div id="typing-indicator" class="typing-indicator hidden" aria-live="polite">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <span class="sr-only"><%= t('chat.typing') %></span>
+          </div>
+      </div>
+      
+    
+      
+      <form id="chat-form" class="chat-form" aria-label="<%= t('chat.messageForm') %>">
+        <div class="input-wrapper">
+          <textarea
+            id="chat-input"
+            class="chat-input" 
+            placeholder="<%= t('chat.placeholder') %>" 
+            aria-label="<%= t('chat.ariaLabel') %>"
+            autocomplete="off"
+            rows="1"
+          ></textarea>
+          <button type="submit" id="send-button" class="send-button" aria-label="<%= t('chat.send') %>">
+            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </div>
+      </form>
     </div>
     
-    <!-- Chat Interface -->
-    <div id="chat-container" aria-live="polite" aria-relevant="additions">
-      <div id="chat-messages" tabindex="0" role="log" aria-label="<%= t('chat.conversation') %>">
-        <!-- I messaggi verranno aggiunti dinamicamente qui -->
-      </div>
-      
-      <div id="chat-input-container">
-        <form id="chat-form" aria-label="<%= t('chat.messageForm') %>">
-          <div class="input-wrapper">
-            <input type="text" id="chat-input" 
-                  placeholder="<%= t('chat.placeholder') %>" 
-                  aria-label="<%= t('chat.ariaLabel') %>"
-                  autocomplete="off">
-            <button type="submit" id="send-button" class="btn btn-primary" aria-label="<%= t('chat.send') %>">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="send-icon"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-            </button>
-          </div>
-        </form>
-      </div>
-      
-      <div id="typing-indicator" class="hidden" aria-live="polite">
-        <div class="typing-dot"></div>
-        <div class="typing-dot"></div>
-        <div class="typing-dot"></div>
-        <span class="sr-only"><%= t('chat.typing') %></span>
-      </div>
+    <!-- Thank You Screen -->
+    <div id="thank-you-screen" class="thank-you-screen hidden" aria-live="polite">
+      <svg class="success-icon" viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+      <h2><%= t('thankyou.title') %></h2>
+      <p><%= t('thankyou.message') %></p>
+      <button id="new-conversation" class="btn btn-primary"><%= t('thankyou.newConversation') %></button>
     </div>
-
-    <!-- Thank You Screen (hidden initially) -->
-    <div id="thank-you-screen" class="hidden" aria-live="polite">
-      <div class="thank-you-content">
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="success-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-        <h2><%= t('thankyou.title') %></h2>
-        <p><%= t('thankyou.message') %></p>
-        <button id="new-conversation" class="btn btn-primary"><%= t('thankyou.newConversation') %></button>
-      </div>
-    </div>
-
-    <!-- Info Cards - Hidden -->
-    <div class="info-section">
-      <!-- Info cards hidden via CSS -->
-    </div>
-
-    <!-- Debug Panel (hidden in production) -->
-    <% if (process.env.NODE_ENV === 'development') { %>
-    <div id="debug-panel">
-      <h3>Debug Panel</h3>
-      <div class="debug-toggle">
-        <input type="checkbox" id="debug-toggle">
-        <label for="debug-toggle">Enable Debug Mode</label>
-      </div>
-      <div id="debug-content" class="hidden">
-        <div class="debug-section">
-          <h4>Socket Status</h4>
-          <div id="socket-status">Socket: Disconnected</div>
-        </div>
-        <div class="debug-section">
-          <h4>Client Info</h4>
-          <pre id="client-info"><%= JSON.stringify(clientInfo, null, 2) %></pre>
-        </div>
-        <div class="debug-section">
-          <h4>Conversation Log</h4>
-          <pre id="conversation-log"></pre>
-        </div>
-      </div>
-    </div>
-    <% } %>
   </main>
-
-  <footer>
-    <div class="container">
-      <p>&copy; <%= new Date().getFullYear() %> <%= t('footer.copyright') %></p>
-      <div class="footer-links">
-        <a href="/privacy"><%= t('footer.privacy') %></a>
-        <a href="/terms"><%= t('footer.terms') %></a>
-        <a href="/contact"><%= t('footer.contact') %></a>
-      </div>
-    </div>
-  </footer>
 
   <!-- CSRF Token -->
   <input type="hidden" id="csrf-token" value="<%= csrfToken %>">

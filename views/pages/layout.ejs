@@ -16,13 +16,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- App CSS -->
-  <link rel="stylesheet" href="/css/style-simple.css">
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body class="chat-inactive">
   <header class="app-header">
     <div class="brand">DietingWithJoe</div>
     <div class="header-actions">
-      <div class="language-menu">
+      <!-- <div class="language-menu">
         <button id="language-btn" aria-label="<%= t('language.selector') %>">
           <%= currentLang.toUpperCase() %> <span class="chevron-down">▼</span>
         </button>
@@ -33,7 +33,15 @@
           <a href="/changelanguage/es?redirect=/" role="menuitem" class="<%= currentLang === 'es' ? 'active' : '' %>" lang="es">Español</a>
           <a href="/changelanguage/de?redirect=/" role="menuitem" class="<%= currentLang === 'de' ? 'active' : '' %>" lang="de">Deutsch</a>
           <a href="/changelanguage/pt?redirect=/" role="menuitem" class="<%= currentLang === 'pt' ? 'active' : '' %>" lang="pt">Português</a>
-        </div>
+        </div> -->
+      </div>
+      <button id="menu-btn" aria-label="<%= t('menu.label', 'Menu') %>">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+      </button>
+      <div id="menu-dropdown" class="menu-dropdown hidden">
+        <a href="/privacy" role="menuitem"><%= t('footer.privacy') %></a>
+        <a href="/terms" role="menuitem"><%= t('footer.terms') %></a>
+        <a href="/contact" role="menuitem"><%= t('footer.contact') %></a>
       </div>
     </div>
   </header>
@@ -53,29 +61,48 @@
   <footer>
     <div class="app-container" style="padding-top: 2rem; padding-bottom: 2rem;">
       <p>&copy; <%= new Date().getFullYear() %> <%= t('footer.copyright') %></p>
-      <div class="footer-links">
+      <!-- <div class="footer-links">
         <a href="/privacy"><%= t('footer.privacy') %></a>
         <a href="/terms"><%= t('footer.terms') %></a>
         <a href="/contact"><%= t('footer.contact') %></a>
-      </div>
+      </div> -->
     </div>
   </footer>
 
-  <!-- Script lingua -->
+  <!-- Script lingua e menu -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      // Language dropdown functionality
       const langBtn = document.getElementById('language-btn');
-      const dropdown = document.querySelector('.language-dropdown');
+      const langDropdown = document.querySelector('.language-dropdown');
 
-      if (langBtn && dropdown) {
+      if (langBtn && langDropdown) {
         langBtn.addEventListener('click', function(e) {
           e.stopPropagation();
-          dropdown.classList.toggle('hidden');
+          langDropdown.classList.toggle('hidden');
         });
 
         document.addEventListener('click', function(e) {
-          if (!dropdown.contains(e.target) && !langBtn.contains(e.target)) {
-            dropdown.classList.add('hidden');
+          if (!langDropdown.contains(e.target) && !langBtn.contains(e.target)) {
+            langDropdown.classList.add('hidden');
+          }
+        });
+      }
+      
+      // Menu dropdown functionality
+      const menuBtn = document.getElementById('menu-btn');
+      const menuDropdown = document.getElementById('menu-dropdown');
+      
+      if (menuBtn && menuDropdown) {
+        menuBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          menuDropdown.classList.toggle('hidden');
+        });
+        
+        // Close menu when clicking elsewhere
+        document.addEventListener('click', function(e) {
+          if (!menuDropdown.contains(e.target) && !menuBtn.contains(e.target)) {
+            menuDropdown.classList.add('hidden');
           }
         });
       }
