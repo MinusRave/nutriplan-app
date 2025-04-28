@@ -73,7 +73,7 @@ const isSecure = () => {
 };
 
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'nutriplan_secret_key',
+  secret: process.env.SESSION_SECRET || 'dietingwithjoe_secret_key',
   resave: true, // Per garantire sessioni persistenti
   saveUninitialized: true,
   cookie: { 
@@ -161,7 +161,7 @@ const conversations = new Map();
 /**
  * Classe per gestire una conversazione con Claude
  */
-class NutritionalConversation {
+class DietingWithJoeConversation {
   constructor(language) {
     this.language = language || 'it';
     this.systemPrompt = this.getSystemPrompt();
@@ -655,7 +655,7 @@ io.on('connection', (socket) => {
     
     // Crea nuova conversazione
     const language = data.language || 'it';
-    const conversation = new NutritionalConversation(language);
+    const conversation = new DietingWithJoeConversation(language);
     conversations.set(sessionId, conversation);
     
     // Aggiorna lo stato iniziale
@@ -691,7 +691,7 @@ io.on('connection', (socket) => {
       // Ottieni o crea conversazione
       let conversation = conversations.get(sessionId);
       if (!conversation) {
-        conversation = new NutritionalConversation(data.language || 'it');
+        conversation = new DietingWithJoeConversation(data.language || 'it');
         conversations.set(sessionId, conversation);
         console.log(`Creata nuova conversazione per sessione ${sessionId}`);
       }

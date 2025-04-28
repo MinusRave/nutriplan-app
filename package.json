@@ -1,5 +1,5 @@
 {
-  "name": "nutriplan",
+  "name": "dietingwithjoe",
   "version": "1.0.0",
   "description": "Applicazione web per piani alimentari personalizzati con Claude AI",
   "main": "app.js",

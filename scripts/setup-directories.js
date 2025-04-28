@@ -32,8 +32,8 @@ const faviconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="3
 
 // Crea un semplice webmanifest
 const webmanifest = JSON.stringify({
-  "name": "NutriPlan",
-  "short_name": "NutriPlan",
+  "name": "DietingWithJoe",
+  "short_name": "DietingWithJoe",
   "icons": [
     {
       "src": "/images/favicon/android-chrome-192x192.png",

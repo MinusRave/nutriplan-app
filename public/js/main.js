@@ -1595,6 +1595,9 @@ try {
           elements.chatContainer.classList.add('thank-you-visible');
           elements.thankYouScreen.classList.remove('hidden');
           elements.thankYouScreen.classList.add('fade-in');
+
+          document.querySelector('.app-container').classList.add('center-thankyou');
+
           
           // Animazione del checkmark di successo
           const successIcon = elements.thankYouScreen.querySelector('.success-icon');

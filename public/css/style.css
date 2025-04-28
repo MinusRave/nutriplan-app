@@ -812,4 +812,12 @@
     background-color: #fdecea;
     color: var(--accent-dark);
   }
-    
+  
+  .app-container.center-thankyou {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 60px); /* Altezza viewport meno header */
+  }
+  
